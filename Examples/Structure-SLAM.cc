@@ -1,10 +1,8 @@
 /**
-Indoor SLAM.
+Structure-SLAM
 Feed the pipeline with RGB and predicted normal frames.
-
 Yanyan Li
 */
-
 
 #include<iostream>
 #include<algorithm>
@@ -43,7 +41,7 @@ int main(int argc, char **argv)
     int nImages = vstrImageFilenames.size();
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::MONOCULAR,true);
+    StructureSLAM::System SLAM(argv[1],argv[2],StructureSLAM::System::MONOCULAR,true);
 
     // Vector for tracking time statistics
     vector<float> vTimesTrack;
@@ -54,17 +52,11 @@ int main(int argc, char **argv)
     cout << "Images in the sequence: " << nImages << endl << endl;
 
 
-
     // Main loop
     cv::Mat im;
     cv::Mat normal;
     for(int ni=0; ni<nImages; ni++)
     {
-        // Read image from file
-        //if(ni==1)ni+=10;
-        //if((ni > 0) && (ni<20)) continue;
-
-        //if(ni>140)sleep(2);
         im = cv::imread(string(argv[3])+"/"+vstrImageFilenames[ni],CV_LOAD_IMAGE_UNCHANGED);
         normal = cv::imread(string(argv[3])+"/"+vstrNormalFilenames[ni],CV_LOAD_IMAGE_UNCHANGED);
         double tframe = vTimestamps[ni];
