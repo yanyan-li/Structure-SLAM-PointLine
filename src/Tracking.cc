@@ -22,6 +22,7 @@
 #include "Tracking.h"
 
 #include <opencv2/core/core.hpp>
+#include <opencv2/core/eigen.hpp>
 #include <opencv2/features2d/features2d.hpp>
          
 #include "ORBmatcher.h"
@@ -213,12 +214,6 @@ cv::Mat Tracking::GrabImageMonocularWithNormal(const cv::Mat &im,const cv::Mat &
 
 void Tracking::TrackWithNormal()
 {
-
-    // Track包含两部分：估计运动、跟踪局部地图
-
-    // mState为tracking的状态机
-    // SYSTEM_NOT_READY=-1, NO_IMAGES_YET=0, NOT_INITIALIZED=1, OK=2, LOST=3
-    // 如果图像复位过，或者第一次运行，则为NO_IMAGES_YET状态
     if(mState==NO_IMAGES_YET)
     {
         mState = NOT_INITIALIZED;
@@ -232,13 +227,9 @@ void Tracking::TrackWithNormal()
 
     if(mState==NOT_INITIALIZED)
     {
-        if (!bIni_Manhattan)
-            MonocularInitialization(); // ORBSLAM Initialization
-        else
-            MonocularInitializationWithNormal(); //Manhattan initialization
-
+        //Manhattan initialization
+        MonocularInitializationWithNormal();
         mpFrameDrawer->Update(this);
-
         if(mState!=OK)
             return;
     }
@@ -247,12 +238,9 @@ void Tracking::TrackWithNormal()
         //Tracking: system is initialized
         // bOK是临时变量，用于表示每个函数是否执行成功
         bool bOK;
-
         // Initial camera pose estimation using motion model or relocalization (if tracking is lost)
         if(!mbOnlyTracking)
         {
-
-
             cv::Mat relatedPose = cv::Mat::zeros(cv::Size(3,3),CV_32F);
             if(bIni_Manhattan)
             {
@@ -762,7 +750,6 @@ void Tracking::Track()
 
 }
 
-
 void Tracking::MonocularInitializationWithNormal()
 {
     int num=50;
@@ -775,32 +762,8 @@ void Tracking::MonocularInitializationWithNormal()
             mInitialFrame=Frame(mCurrentFrame);
             mLastFrame=Frame(mCurrentFrame);
 
-
             //当前帧的 surface normal
             Rotation_cm=SeekManhattanFrame(mCurrentFrame.vSurfaceNormal,mCurrentFrame.mVF3DLines).clone();
-            Rotation_cm=cv::Mat::zeros(cv::Size(3,3),CV_32F);
-            //lr-k1
-            Rotation_cm.at<float>(0,0)=0.9998;Rotation_cm.at<float>(0,1)=0.0006;Rotation_cm.at<float>(0,2)=-0.0217;
-            Rotation_cm.at<float>(1,0)=-0.0010;Rotation_cm.at<float>(1,1)=0.9999;Rotation_cm.at<float>(1,2)=-0.0166;
-            Rotation_cm.at<float>(2,0)=0.0217;Rotation_cm.at<float>(2,1)=0.0166;Rotation_cm.at<float>(2,2)=0.9996;
-            //
-            Rotation_cm.at<float>(0,0)=1.000;Rotation_cm.at<float>(0,1)=-0.0024;Rotation_cm.at<float>(0,2)=0.0009;
-            Rotation_cm.at<float>(1,0)=0.0024;Rotation_cm.at<float>(1,1)=1.0000;Rotation_cm.at<float>(1,2)=0.0015;
-            Rotation_cm.at<float>(2,0)=-0.0009;Rotation_cm.at<float>(2,1)=-0.0015;Rotation_cm.at<float>(2,2)=1.000;
-            //of_k1
-//            Rotation_cm.at<float>(0,0)=1.000;Rotation_cm.at<float>(0,1)=-0.0016;Rotation_cm.at<float>(0,2)=0.0069;
-//            Rotation_cm.at<float>(1,0)=0.0016;Rotation_cm.at<float>(1,1)=1.0000;Rotation_cm.at<float>(1,2)=0.0005;
-//            Rotation_cm.at<float>(2,0)=-0.0069;Rotation_cm.at<float>(2,1)=-0.0005;Rotation_cm.at<float>(2,2)=1.0000;
-            //large_ca
-            //Rotation_cm.at<float>(0,0)=0.7925;Rotation_cm.at<float>(0,1)=-0.0077;Rotation_cm.at<float>(0,2)=0.6099;
-            //Rotation_cm.at<float>(1,0)=0.1843;Rotation_cm.at<float>(1,1)=0.9562;Rotation_cm.at<float>(1,2)=-0.2275;
-            //Rotation_cm.at<float>(2,0)=-0.5814;Rotation_cm.at<float>(2,1)=0.2927;Rotation_cm.at<float>(2,2)=0.7591;
-
-            //corridor2
-//            Rotation_cm.at<float>(0,0)=0.9748;Rotation_cm.at<float>(0,1)=-0.0375;Rotation_cm.at<float>(0,2)=-0.2197;
-//            Rotation_cm.at<float>(1,0)=-0.0463;Rotation_cm.at<float>(1,1)=0.9303;Rotation_cm.at<float>(1,2)=-0.3640;
-//            Rotation_cm.at<float>(2,0)=0.2182;Rotation_cm.at<float>(2,1)=0.3650;Rotation_cm.at<float>(2,2)=0.9051;
-
             Rotation_cm.copyTo(mLastRcm);
             cv ::Mat MF_can= cv::Mat::zeros(cv::Size(3,3),CV_32F);
             cv ::Mat MF_can_T= cv::Mat::zeros(cv::Size(3,3),CV_32F);
@@ -1066,275 +1029,52 @@ bool Tracking::TranslationWithMotionModel(cv::Mat &relatedPose)
 
 }
 
-
-
 cv::Mat Tracking::SeekManhattanFrame(vector<SurfaceNormal> &vTempSurfaceNormal,vector<FrameLine> &vVanishingDirection)
 {
 
-    cv::Mat R_cm_update=cv::Mat::zeros(cv::Size(3,3),CV_32F);
     vector<cv::Mat> vRotaionMatrix;
     vector<cv::Mat> vRotaionMatrix_good;
     cv::RNG rnger(cv::getTickCount());
-    for(int k=0;k<1;k++)
-    {
-        //vector<cv::Point3d> vTempSurfaceNormal; //
+
         vector<cv::Mat> vSN_good;
         vector<double> lambda_good;
         vector<cv::Point2d> m_j_selected;
-        //cv::Mat R_cm_update=cv::Mat::eye(cv::Size(3,3),CV_32F);
-
-
-        //初始化 R——cm_update
-        rnger.fill(R_cm_update, cv::RNG::UNIFORM, cv::Scalar::all(0.01), cv::Scalar::all(1));
-        //cout<<"Random"<<R_cm_update<<endl;
-        /* Eigen::Quaterniond qnorm;
-         Eigen::Quaterniond q(R_cm_update.at<float>(0,0),R_cm_update.at<float>(0,1),R_cm_update.at<float>(0,2),R_cm_update.at<float>(1,0));//=Eigen::MatrixXd::Random(1, 4);
-         cout<<"init q"<<q.x()<<","<<q.y()<<","<<q.z()<<","<<q.w()<<endl;
-         qnorm.x()=q.x()/q.norm();qnorm.y()=q.y()/q.norm();
-         qnorm.z()=q.z()/q.norm();qnorm.w()=q.w()/q.norm();
-         eigen2cv(qnorm.matrix(),R_cm_update);//	eigen2cv(m, img);;*/
-
+        // R_cm_update matrix
+        cv::Mat R_cm_update=cv::Mat::eye(cv::Size(3,3),CV_32F);
+        cv::Mat qu = cv::Mat::zeros(cv::Size(4,1),CV_32F);
+        rnger.fill(qu, cv::RNG::UNIFORM, cv::Scalar::all(0.01), cv::Scalar::all(1));
+        Eigen::Quaterniond qnorm;
+        Eigen::Quaterniond q(qu.at<float>(0,0),qu.at<float>(1,0),qu.at<float>(2,0),qu.at<float>(3,0));//=Eigen::MatrixXd::Random(1, 4);
+        qnorm.x()=q.x()/q.norm();qnorm.y()=q.y()/q.norm();
+        qnorm.z()=q.z()/q.norm();qnorm.w()=q.w()/q.norm();
+        cv::eigen2cv(qnorm.matrix(),R_cm_update);//	eigen2cv(m, img);;*/
+        //cout<<R_cm_update<<endl;
         cv::SVD svd; cv::Mat U,W,VT;
         svd.compute(R_cm_update,W,U,VT);
         R_cm_update=U*VT;
-
-        //cout<<"init"<<qnorm.x()<<","<<qnorm.y()<<","<<qnorm.z()<<","<<qnorm.w()<<","<<R_cm_update<<endl;
-
-        //cout<<"init"<<R_cm_update<<endl;
+        //cout<<000<<R_cm_update<<endl;
+        // R_cm_Rec matrix
         cv::Mat R_cm_Rec=cv::Mat::zeros(cv::Size(3,3),CV_32F);
+        cv::Mat R_cm_new=cv::Mat::zeros(cv::Size(3,3),CV_32F);
         cv::Mat R_cm_initial;
         int  validMF=0;
-
-        /*cout<<"Tracking,vSurfaceNormal"<<vSurfaceNormal->size()<<endl;
-        //转化过来 surfacenomal
-        for(size_t i=0;i<vSurfaceNormal->size();i++)
-        {
-            vTempSurfaceNormal.push_back(cv::Point3d(vSurfaceNormal->at(i).normal_x,vSurfaceNormal->at(i).normal_y,vSurfaceNormal->at(i).normal_z));
-            cout<<"point"<<vSurfaceNormal->at(i).normal_x<<vSurfaceNormal->at(i).normal_y<<vSurfaceNormal->at(i).normal_z<<endl;
-        }*/
-        int numPlaneFound=0;
-
-        //cout<<" vector<cv::Point3d> vTempSurfaceNormal"<<endl;
-        //cv::Mat R=cv::Mat::eye(cv::Size(3,3),CV_32FC1);
-        for(int i=0;i<10;i++)
-        {
-
-            cv::Mat R_cm=R_cm_update;//cv::Mat::eye(cv::Size(3,3),CV_32FC1);  // 对角线为1的对角矩阵(3, 3, CV_32FC1);
-            //cout<<"R_cm"<<R_cm<<endl;
-            int directionFound1=0;int directionFound2=0;int directionFound3=0; //三个方向
-            int numDirectionFound=0;
-            validMF=0;
-            for(int a=1;a<4;a++)
-            {
-                cv::Mat ra =ProjectSN2MF( a,R_cm,vTempSurfaceNormal,vVanishingDirection);
-                //cout<<"test projectSN2MF"<<ra<<endl;
-                //如果 ra不为0
-                if(sum(ra)[0]!=0)
-                {
-                    numDirectionFound += 1;
-                    if(a==1) directionFound1=1;//确定发现a=1面
-                    else if(a==2) directionFound2=1;
-                    else if(a==3) directionFound3=1;
-                    R_cm_Rec.at<float>(0,a-1) =ra.at<float>(0,0);
-                    R_cm_Rec.at<float>(1,a-1) =ra.at<float>(1,0);
-                    R_cm_Rec.at<float>(2,a-1) =ra.at<float>(2,0);
-                }
-            }
-            //cout<<"R_cm_Rec"<<R_cm_Rec<<endl;
-            //cout<<"direction:"<<directionFound1<<","<<directionFound2<<","<<directionFound3<<endl;
-            if(numDirectionFound<2)
-            {
-                numDirectionFound=0;
-                validMF=0;
-                directionFound1=0;directionFound2=0;directionFound3=0;
-                break;
-            }
-            else if(numDirectionFound==2)
-            {
-                if(directionFound1&&directionFound2)
-                {
-                    cv::Mat v1=R_cm_Rec.colRange(0,1).clone();
-                    //cout<<1<<v1<<endl;
-                    cv::Mat v2=R_cm_Rec.colRange(1,2).clone();
-                    cv::Mat v3 = v1.cross(v2);
-                    R_cm_Rec.at<float>(0,2) =v3.at<float>(0,0);
-                    R_cm_Rec.at<float>(1,2) =v3.at<float>(1,0);
-                    R_cm_Rec.at<float>(2,2) =v3.at<float>(2,0);
-                    if(abs(cv::determinant(R_cm_Rec)+1)<0.5)
-                    {
-                        R_cm_Rec.at<float>(0,2) =-v3.at<float>(0,0);
-                        R_cm_Rec.at<float>(1,2) =-v3.at<float>(1,0);
-                        R_cm_Rec.at<float>(2,2) =-v3.at<float>(2,0);
-                    }
-
-                }else if(directionFound2&&directionFound3)
-                {
-                    cv::Mat v2=R_cm_Rec.colRange(1,2).clone();
-                    cv::Mat v3=R_cm_Rec.colRange(2,3).clone();
-                    cv::Mat v1 = v3.cross(v2);
-                    R_cm_Rec.at<float>(0,0) =v1.at<float>(0,0);
-                    R_cm_Rec.at<float>(1,0) =v1.at<float>(1,0);
-                    R_cm_Rec.at<float>(2,0) =v1.at<float>(2,0);
-                    if(abs(cv::determinant(R_cm_Rec)+1)<0.5)
-                    {
-                        R_cm_Rec.at<float>(0,0) =-v1.at<float>(0,0);
-                        R_cm_Rec.at<float>(1,0) =-v1.at<float>(1,0);
-                        R_cm_Rec.at<float>(2,0) =-v1.at<float>(2,0);
-                    }
-                }else if(directionFound1&&directionFound3)
-                {
-                    cv::Mat v1=R_cm_Rec.colRange(0,1).clone();
-                    //cout<<"3-v3"<<v1<<endl;
-                    cv::Mat v3=R_cm_Rec.colRange(2,3).clone();
-                    ///cout<<"3-v3"<<v3<<endl;
-                    cv::Mat v2 = v1.cross(v3);
-                    R_cm_Rec.at<float>(0,1) =v2.at<float>(0,0);
-                    R_cm_Rec.at<float>(1,1) =v2.at<float>(1,0);
-                    R_cm_Rec.at<float>(2,1) =v2.at<float>(2,0);
-                    if(abs(cv::determinant(R_cm_Rec)+1)<0.5)
-                    {
-                        R_cm_Rec.at<float>(0,1) =-v2.at<float>(0,0);
-                        R_cm_Rec.at<float>(1,1) =-v2.at<float>(1,0);
-                        R_cm_Rec.at<float>(2,1) =-v2.at<float>(2,0);
-                    }
-
-                }
-            }
-
-            //cout<<"R_cm_Rec_before"<<R_cm_Rec<<endl;
-            numPlaneFound=numDirectionFound;
-            //利用SVD分解
-            cv::SVD svd; cv::Mat U,W,VT;
-            svd.compute(R_cm_Rec,W,U,VT);
-            R_cm_update=U*VT;
-            //cout<<"R_cm_Rec_after"<<R_cm_update<<endl;
-            validMF=1;
-            //判断是否收敛
-            if(acos((trace(R_cm.t()*R_cm_update)[0]-1.0))/2 < 0.01)
-            {cout<<"trace "<<endl;break;}
-
-        }
-
-        //把candidate 装进rotationMatrix vector
-        if(validMF==1)
-        {
-            vRotaionMatrix.push_back(R_cm_update);
-        }
+        //cout<<R_cm_update<<endl;
+        R_cm_new.at<float>(0,0) = R_cm_update.at<double>(0,0);
+        R_cm_new.at<float>(0,1) = R_cm_update.at<double>(0,1);
+        R_cm_new.at<float>(0,2) = R_cm_update.at<double>(0,2);
+        R_cm_new.at<float>(1,0) = R_cm_update.at<double>(1,0);
+        R_cm_new.at<float>(1,1) = R_cm_update.at<double>(1,1);
+        R_cm_new.at<float>(1,2) = R_cm_update.at<double>(1,2);
+        R_cm_new.at<float>(2,0) = R_cm_update.at<double>(2,0);
+        R_cm_new.at<float>(2,1) = R_cm_update.at<double>(2,1);
+        R_cm_new.at<float>(2,2) = R_cm_update.at<double>(2,2);
+        //cout<<R_cm_new<<endl;
+        //matTemp.convertTo(MatTemp2, CV_8U)
+        R_cm_new = TrackManhattanFrame(R_cm_new, vTempSurfaceNormal,vVanishingDirection);
+        //cout<<R_cm_update<<endl;
+        return R_cm_new;//vRotaionMatrix_good[0];
 
 
-    }
-    //check at least one manhattan frame
-    size_t numMF= vRotaionMatrix.size();
-    if(numMF==0)
-    {
-        cout<<"********not a Manhattan Frame**********"<<endl;
-    }
-
-    //移除 vRotationMatrix中多余的R
-    vector<cv::Mat> vMF_CAN;
-    vector<cv::Mat> vR_poss;
-    int cellIndex=1;
-    for (int row1=0;row1<3;row1++  )
-        for(int row2=0;row2<3;row2++ )
-            if(row2!=row1)
-                for(int row3=0;row3<3;row3++ )
-                {
-                    if (row3 != row1 && row3 != row2)
-                    {
-                        cv::Mat R = cv::Mat::zeros(cv::Size(3,3),CV_32F);
-
-                        R.at<float>(0,row1) = 1.0; R.at<float>(1,row2) = 1.0; R.at<float>(2,row3) = 1.0;
-                        if (determinant(R)>0)
-                        {
-                            vR_poss.push_back(R);
-                            cellIndex +=1;
-                        }
-                        R.at<float>(0,row1) = 1.0; R.at<float>(1,row2) = 1.0; R.at<float>(2,row3) = -1.0;
-                        if (determinant(R)>0)
-                        {
-                            vR_poss.push_back(R);
-                            cellIndex +=1;
-                        }
-                        R.at<float>(0,row1) = 1.0; R.at<float>(1,row2) = -1.0; R.at<float>(2,row3) = 1.0;
-                        if (determinant(R)>0)
-                        {
-                            vR_poss.push_back(R);
-                            cellIndex +=1;
-                        }
-                        R.at<float>(0,row1) = 1.0; R.at<float>(1,row2) = -1.0; R.at<float>(2,row3) = -1.0;
-                        if (determinant(R)>0)
-                        {
-                            vR_poss.push_back(R);
-                            cellIndex +=1;
-                        }
-                        R.at<float>(0,row1) = -1.0; R.at<float>(1,row2) = 1.0; R.at<float>(2,row3) = 1.0;
-                        if (determinant(R)>0)
-                        {
-                            vR_poss.push_back(R);
-                            cellIndex +=1;
-                        }
-                        R.at<float>(0,row1) = -1.0; R.at<float>(1,row2) = 1.0; R.at<float>(2,row3) = -1.0;
-                        if (determinant(R)>0)
-                        {
-                            vR_poss.push_back(R);
-                            cellIndex +=1;
-                        }
-                        R.at<float>(0,row1) = -1.0; R.at<float>(1,row2) = -1.0; R.at<float>(2,row3) = 1.0;
-                        if (determinant(R)>0)
-                        {
-                            vR_poss.push_back(R);
-                            cellIndex +=1;
-                        }
-                        R.at<float>(0,row1) = -1.0; R.at<float>(1,row2) = -1.0; R.at<float>(2,row3) = -1.0;
-                        if (determinant(R)>0)
-                        {
-                            vR_poss.push_back(R);
-                            cellIndex +=1;
-                        }
-
-
-                    }
-
-                }
-    // remove redundancy and convert to canonical coordinate
-    size_t numRCandi=vRotaionMatrix.size();
-    cout<<"rotation candidate"<<vRotaionMatrix.size()<<endl;
-    for( size_t i=0;i<numRCandi;i++)
-    {
-        cv::Mat m_star;
-        int minTheta=100;
-        int minID=-1;
-        for (int j=0;j<24;j++)
-        {
-            m_star=vRotaionMatrix[i]*vR_poss[j];
-            double errTheta=acos((trace(m_star)[0]-1)/2);
-            if(errTheta<minTheta)
-            {
-                minTheta=errTheta;
-                minID=j;
-            }
-
-        }
-        cout<<"good candidate"<<vRotaionMatrix[i]*vR_poss[minID]<<endl;
-        vRotaionMatrix_good.push_back(vRotaionMatrix[i]*vR_poss[minID]);
-    }
-    //clean the null entries
-
-
-    cout<<"VrOTATION GOOD"<<vRotaionMatrix_good.size()<<endl;
-    double ratio=0.10;
-    //cv::Mat R=ClusterMultiManhattanFrame(vRotaionMatrix_good,ratio);
-    //cout<<"R"<<R<<endl;
-    //做一个
-    //
-
-    /*for(int i=0;i<R_cm_update.rows;i++)
-    {
-        for(int j=0;j<R_cm_update.cols;j++)
-            cout<<R_cm_update.at<float>(i,j)<<', ';
-        cout<<endl;
-    }*/
-    return R_cm_update;//vRotaionMatrix_good[0];
 }
 
 cv::Mat Tracking::ClusterMultiManhattanFrame(vector<cv::Mat> &vRotationCandidate,double &clusterRatio)
@@ -1806,6 +1546,7 @@ cv::Mat Tracking::TrackManhattanFrame(cv::Mat &mLastRcm,vector<SurfaceNormal> &v
 {
     //上一帧的 camera 到 manhattan的距离
     //cout<<"begin Tracking Manhattan frame"<<endl;
+    //cout<<"mLastRcm0:"<<mLastRcm<<endl;
     cv::Mat R_cm_update=mLastRcm.clone();
     //cout<<"mLastRcm"<<mLastRcm<<endl;
     int isTracked = 0;
@@ -1826,11 +1567,13 @@ cv::Mat Tracking::TrackManhattanFrame(cv::Mat &mLastRcm,vector<SurfaceNormal> &v
             //在每个conic有多少 点
             cv::Mat R_mc=cv::Mat::zeros(cv::Size(3,3),CV_32F);
             int c1=(a+3)%3; int c2=(a+4)%3; int c3=(a+5)%3;
+            //cout<<"R_cm a"<<R_cm<<endl;
             R_mc.at<float>(0,0)=R_cm.at<float>(0,c1);R_mc.at<float>(0,1)=R_cm.at<float>(0,c2);
             R_mc.at<float>(0,2)=R_cm.at<float>(0,c3);R_mc.at<float>(1,0)=R_cm.at<float>(1,c1);
             R_mc.at<float>(1,1)=R_cm.at<float>(1,c2);R_mc.at<float>(1,2)=R_cm.at<float>(1,c3);
             R_mc.at<float>(2,0)=R_cm.at<float>(2,c1);R_mc.at<float>(2,1)=R_cm.at<float>(2,c2);
             R_mc.at<float>(2,2)=R_cm.at<float>(2,c3);
+            //cout<<"R_cm b"<<R_mc<<endl;
             cv::Mat R_mc_new=R_mc.t();
             //cout<<"R_mc_new"<<R_mc_new<<endl;
             vaxiSNV[a-1] = ProjectSN2Conic(a, R_mc_new, vSurfaceNormal,vVanishingDirection);
@@ -1880,7 +1623,7 @@ cv::Mat Tracking::TrackManhattanFrame(cv::Mat &mLastRcm,vector<SurfaceNormal> &v
 
                     tempVVSN=&vaxiSNV[i].SNVector;
                     tempLineDirection=&vaxiSNV[i].Linesvector;
-                    //cout<<"2 a:"<<vaxiSNV[i].axis<<",vector:"<<tempVVSN.size()<<endl;
+                    //cout<<"2 a:"<<vaxiSNV[i].axis<<",vector:"<<tempVVSN->size()<<endl;
                     break;
                 }
 
@@ -1970,29 +1713,7 @@ cv::Mat Tracking::TrackManhattanFrame(cv::Mat &mLastRcm,vector<SurfaceNormal> &v
         //cout<<"svd before"<<R_cm_update<<endl;
         SVD svd;
         cv::Mat U, W, VT;
-        /*for(int i=0;i<3;i++)
-        {
-            cout<<"v"<<vDensity[i].x<<endl;
-            if(vDensity[i].x==1.0)
-            {
-                //cout<<"vy"<<vDensity[i].y<<endl;
-                R_cm_update.at<float>(0,0)=vDensity[i].y* R_cm_update.at<float>(0,0);
-                R_cm_update.at<float>(1,0)=vDensity[i].y* R_cm_update.at<float>(1,0);
-                R_cm_update.at<float>(2,0)=vDensity[i].y* R_cm_update.at<float>(2,0);
-            }
-            if(vDensity[i].x==2.0)
-            {
-                R_cm_update.at<float>(0,1)=vDensity[i].y* R_cm_update.at<float>(0,1);
-                R_cm_update.at<float>(1,1)=vDensity[i].y* R_cm_update.at<float>(1,1);
-                R_cm_update.at<float>(2,1)=vDensity[i].y* R_cm_update.at<float>(2,1);
-            }
-            if(vDensity[i].x==3.0)
-            {
-                R_cm_update.at<float>(0,2)=vDensity[i].y* R_cm_update.at<float>(0,2);
-                R_cm_update.at<float>(1,2)=vDensity[i].y* R_cm_update.at<float>(1,2);
-                R_cm_update.at<float>(2,2)=vDensity[i].y* R_cm_update.at<float>(2,2);
-            }
-        }*/
+
 
         svd.compute(R_cm_update, W, U, VT);
 
@@ -2030,9 +1751,6 @@ sMS Tracking::MeanShift(vector<cv::Point2d> & v2D)
 
     return  tempMS;
 }
-
-
-
 
 void Tracking::StereoInitialization()
 {
