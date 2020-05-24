@@ -25,33 +25,31 @@ Required by g2o (see below). Download and install instructions can be found at: 
 ## DBoW2 and g2o (Included in Thirdparty folder)
 We use modified versions of the [DBoW2](https://github.com/dorian3d/DBoW2) library to perform place recognition and [g2o](https://github.com/RainerKuemmerle/g2o) library to perform non-linear optimizations. Both modified libraries (which are BSD) are included in the *Thirdparty* folder.
 
-# 3. Building ORB-SLAM2 library and examples
+# 3. Test Structure-SLAM
+
+## Download and build
 
 Clone the repository:
 ```
-git clone https://github.com/raulmur/StructureSLAM.git StructureSLAM
+git clone https://github.com/yanyan-li/Structure-SLAM.git 
 ```
 
-We provide a script `build.sh` to build the *Thirdparty* libraries and *ORB-SLAM2*. Please make sure you have installed all required dependencies (see section 2). Execute:
+We provide a script `build.sh` to build the *Thirdparty* libraries and *Structure-SLAM*. Please make sure you have installed all required dependencies (see section 2). Execute:
 ```
 cd StructureSLAM
 chmod +x build.sh
 ./build.sh
 ```
 
-This will create **libORB_SLAM2.so**  at *lib* folder and the executables **mono_tum**, **mono_kitti**, **rgbd_tum**, **stereo_kitti**, **mono_euroc** and **stereo_euroc** in *Examples* folder.
+## Run on ICL NUIM dataset
 
-# 4. Monocular Examples
+1. Download a sequence and uncompress it to `PATH_TO_SEQUENCE_FOLDER`.
 
-## TUM Dataset
-
-1. Download a sequence from http://vision.in.tum.de/data/datasets/rgbd-dataset/download and uncompress it.
-
-2. Execute the following command. Change `PATH_TO_SEQUENCE_FOLDER`to the uncompressed sequence folder.
+2. Execute the following command. 
 ```
 ./Examples/Structure-SLAM Vocabulary/ORBvoc.txt Examples/TUMX.yaml PATH_TO_SEQUENCE_FOLDER
 ```
 
-## Acknowledgements
+# Acknowledgements
 
 We thank [Raul Mur-Artal](https://github.com/raulmurfor) for his impressive work, [**ORB-SLAM**](https://github.com/raulmur/ORB_SLAM). 
