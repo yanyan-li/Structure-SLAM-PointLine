@@ -9,7 +9,7 @@
 #include <math.h>
 #include "MapPoint.h"
 #include <mutex>
-namespace ORB_SLAM2{
+namespace StructureSLAM{
 class Frame;
 
 class CornerFrameDatebase{

@@ -2,7 +2,7 @@
 * This file is part of ORB-SLAM2.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/ORB_SLAM2>
+* For more information see <https://github.com/raulmur/StructureSLAM>
 *
 * ORB-SLAM2 is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@
 
 #include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"
 #include "lineEdge.h"
-namespace ORB_SLAM2
+namespace StructureSLAM
 {
 
 class LoopClosing;
@@ -54,7 +54,7 @@ public:
 
     int static PoseOptimization(Frame* pFrame);
     int static PoseOptimization(Frame* pFrame,bool isCorner);
-    float static TranslationOptimization(ORB_SLAM2::Frame *pFrame);
+    float static TranslationOptimization(StructureSLAM::Frame *pFrame);
     // if bFixScale is true, 6DoF optimization (stereo,rgbd), 7DoF otherwise (mono)
     void static OptimizeEssentialGraph(Map* pMap, KeyFrame* pLoopKF, KeyFrame* pCurKF,
                                        const LoopClosing::KeyFrameAndPose &NonCorrectedSim3,

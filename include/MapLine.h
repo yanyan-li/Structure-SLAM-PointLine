@@ -20,7 +20,7 @@
 using namespace cv::line_descriptor;
 using namespace Eigen;
 using namespace cv;
-namespace ORB_SLAM2
+namespace StructureSLAM
 {
 class KeyFrame;
 class Map;

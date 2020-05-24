@@ -8,7 +8,7 @@
 #include <include/LSDmatcher.h>
 #include <map>
 
-namespace ORB_SLAM2
+namespace StructureSLAM
 {
     mutex MapLine::mGlobalMutex;
     long unsigned int MapLine::nNextId=0;

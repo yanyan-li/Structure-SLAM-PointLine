@@ -5,7 +5,7 @@
 
 using namespace std;
 
-namespace ORB_SLAM2
+namespace StructureSLAM
 {
     const int LSDmatcher::TH_HIGH = 100;
     const int LSDmatcher::TH_LOW = 50;

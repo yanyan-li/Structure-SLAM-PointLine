@@ -14,7 +14,7 @@
 
 using namespace line_descriptor;
 
-namespace ORB_SLAM2
+namespace StructureSLAM
 {
     class LSDmatcher
     {

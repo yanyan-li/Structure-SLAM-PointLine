@@ -26,7 +26,7 @@ using namespace std;
 using namespace cv;
 //using namespace line_descriptor;      // Thirdparty中的
 
-namespace ORB_SLAM2
+namespace StructureSLAM
 {
     class LineSegment
     {

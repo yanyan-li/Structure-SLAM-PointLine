@@ -6,7 +6,7 @@
 #include "ExtractLineSegment.h"
 #include <opencv2/line_descriptor/descriptor.hpp>
 
-namespace ORB_SLAM2
+namespace StructureSLAM
 {
 LineSegment::LineSegment() {}
 

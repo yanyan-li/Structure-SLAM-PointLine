@@ -5,7 +5,7 @@ Structure-SLAM is a real-time monocular SLAM library that computes the camera tr
 
 # 1. License
 
-Structure-SLAM is released under a [GPLv3 license](https://github.com/raulmur/ORB_SLAM2/blob/master/License-gpl.txt). For a list of all code/library dependencies (and associated licenses), please see [Dependencies.md](https://github.com/raulmur/ORB_SLAM2/blob/master/Dependencies.md).
+Structure-SLAM is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). For a list of all code/library dependencies (and associated licenses), please see [Dependencies.md](https://github.com/raulmur/StructureSLAM/blob/master/Dependencies.md).
 
 # 2. Prerequisites
 We have tested the library in **Ubuntu 12.04**, **14.04** and **16.04**, but it should be easy to compile in other platforms. A powerful computer (e.g. i7) will ensure real-time performance and provide more stable and accurate results.
@@ -29,12 +29,12 @@ We use modified versions of the [DBoW2](https://github.com/dorian3d/DBoW2) libra
 
 Clone the repository:
 ```
-git clone https://github.com/raulmur/ORB_SLAM2.git ORB_SLAM2
+git clone https://github.com/raulmur/StructureSLAM.git StructureSLAM
 ```
 
 We provide a script `build.sh` to build the *Thirdparty* libraries and *ORB-SLAM2*. Please make sure you have installed all required dependencies (see section 2). Execute:
 ```
-cd ORB_SLAM2
+cd StructureSLAM
 chmod +x build.sh
 ./build.sh
 ```
@@ -47,9 +47,9 @@ This will create **libORB_SLAM2.so**  at *lib* folder and the executables **mono
 
 1. Download a sequence from http://vision.in.tum.de/data/datasets/rgbd-dataset/download and uncompress it.
 
-2. Execute the following command. Change `TUMX.yaml` to TUM1.yaml,TUM2.yaml or TUM3.yaml for freiburg1, freiburg2 and freiburg3 sequences respectively. Change `PATH_TO_SEQUENCE_FOLDER`to the uncompressed sequence folder.
+2. Execute the following command. Change `PATH_TO_SEQUENCE_FOLDER`to the uncompressed sequence folder.
 ```
-./Examples/Monocular/mono_tum Vocabulary/ORBvoc.txt Examples/Monocular/TUMX.yaml PATH_TO_SEQUENCE_FOLDER
+./Examples/Structure-SLAM Vocabulary/ORBvoc.txt Examples/TUMX.yaml PATH_TO_SEQUENCE_FOLDER
 ```
 
 ## Acknowledgements

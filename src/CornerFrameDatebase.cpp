@@ -4,7 +4,7 @@
 
 #include "CornerFrameDatebase.h"
 
-namespace ORB_SLAM2{
+namespace StructureSLAM{
 
 CornerFrameDatebase::CornerFrameDatebase()
 {
