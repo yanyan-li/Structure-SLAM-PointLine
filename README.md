@@ -1,7 +1,7 @@
 # Structure-SLAM
 Structure-SLAM is a real-time monocular SLAM library that computes the camera trajectory and a sparse 3D reconstruction based on the assumption of Manhattan World. We provide examples to run the system in the [TUM RGB-D dataset](http://vision.in.tum.de/data/datasets/rgbd-dataset) and [ICL NUIM dataset](https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html). 
 
-​                                 <img src="images/input.png" alt="input" style="zoom:33%;" />       <img src="images/features.png" alt="features" style="zoom:33%;" />
+​                                 <img src="images/input.png" alt="input" style="zoom:3%;" />       <img src="images/features.png" alt="features" style="zoom:33%;" />
 
 
 
