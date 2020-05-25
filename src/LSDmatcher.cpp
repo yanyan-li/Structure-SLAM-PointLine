@@ -266,21 +266,25 @@ namespace StructureSLAM
         ldesc1 = InitialFrame.mLdesc;
         ldesc2 = CurrentFrame.mLdesc;
         bfm->knnMatch(ldesc1, ldesc2, lmatches, 2);
-
+        vector<DMatch> matches;
         double nn_dist_th, nn12_dist_th;
         CurrentFrame.lineDescriptorMAD(lmatches, nn_dist_th, nn12_dist_th);
         nn12_dist_th = nn12_dist_th*0.5;
         sort(lmatches.begin(), lmatches.end(), sort_descriptor_by_queryIdx());
-        for(int i=0; i<lmatches.size(); i++)
+        for(size_t i=0; i<lmatches.size(); i++)
         {
             int qdx = lmatches[i][0].queryIdx;
             int tdx = lmatches[i][0].trainIdx;
+            const DMatch& bestMatch = lmatches[i][0];
+            const DMatch& betterMatch = lmatches[i][1];
+            float  distanceRatio = bestMatch.distance / betterMatch.distance;
             double dist_12 = lmatches[i][1].distance - lmatches[i][0].distance;
-            if(dist_12>nn12_dist_th)
+            if (distanceRatio < 0.75 )
             {
                 LineMatches.push_back(make_pair(qdx, tdx));
                 nmatches++;
             }
+
         }
         return nmatches;
     }

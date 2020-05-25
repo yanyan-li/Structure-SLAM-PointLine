@@ -381,13 +381,6 @@ bool Initializer::InitializeManhattanWorld(const Frame &mInitialFrame,const Fram
 
 
 
-
-//    // Try to reconstruct from homography or fundamental depending on the ratio (0.40-0.45)
-//    if (RH > 0.40)
-//        ReconstructH(vbMatchesInliersH, H, mK, R21, t21, vP3D, vbTriangulated, 1.0, 50);
-//    else //if(pF_HF>0.6)
-//        ReconstructF(vbMatchesInliersF, F, mK, R21, t21, vP3D, vbTriangulated, 1.0, 50);
-
     ////////////////
 
     ///////////////////////////////////////////////////manhattan t
@@ -468,7 +461,6 @@ bool Initializer::InitializeManhattanWorld(const Frame &mInitialFrame,const Fram
     {
         //if(i==4||i==17||i==38||i==0){
         if(i<N){
-
 
         if( !vbMatchesInliers[i]) continue;
         //f1是Frame 1中特征点标号

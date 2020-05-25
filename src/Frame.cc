@@ -51,7 +51,7 @@ namespace StructureSLAM
              mLdesc(frame.mLdesc), NL(frame.NL), mvKeylinesUn(frame.mvKeylinesUn), mvpMapLines(frame.mvpMapLines),  //线特征相关的类成员变量
              mvbLineOutlier(frame.mvbLineOutlier), mvKeyLineFunctions(frame.mvKeyLineFunctions),mvDepthLine(frame.mvDepthLine),
              mvLines3D(frame.mvLines3D),mv3DLineforMap(frame.mv3DLineforMap),dealWithLine(frame.dealWithLine),blurNumber(frame.blurNumber),vSurfaceNormal(frame.vSurfaceNormal),
-             vVanishingDirection(frame.vVanishingDirection),mVF3DLines(frame.mVF3DLines), vSurfaceNormalx(frame.vSurfaceNormalx)
+             vVanishingDirection(frame.vVanishingDirection),mVF3DLines(frame.mVF3DLines), vSurfaceNormalx(frame.vSurfaceNormalx),vSurfaceNormaly(frame.vSurfaceNormaly), vSurfaceNormalz(frame.vSurfaceNormalz)
     {
         for(int i=0;i<FRAME_GRID_COLS;i++)
             for(int j=0; j<FRAME_GRID_ROWS; j++)
@@ -59,149 +59,6 @@ namespace StructureSLAM
 
         if(!frame.mTcw.empty())
             SetPose(frame.mTcw);
-    }
-
-
-    Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
-            :mpORBvocabulary(voc),mpORBextractorLeft(extractorLeft),mpORBextractorRight(extractorRight), mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
-             mpReferenceKF(static_cast<KeyFrame*>(NULL))
-    {
-        // Frame ID
-        mnId=nNextId++;
-
-        // Scale Level Info
-        mnScaleLevels = mpORBextractorLeft->GetLevels();
-        mfScaleFactor = mpORBextractorLeft->GetScaleFactor();
-        mfLogScaleFactor = log(mfScaleFactor);
-        mvScaleFactors = mpORBextractorLeft->GetScaleFactors();
-        mvInvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
-        mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
-        mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
-
-        // ORB extraction
-        thread threadLeft(&Frame::ExtractORB,this,0,imLeft);
-        thread threadRight(&Frame::ExtractORB,this,1,imRight);
-        threadLeft.join();
-        threadRight.join();
-
-        N = mvKeys.size();
-
-        if(mvKeys.empty())
-            return;
-
-        UndistortKeyPoints();
-
-        ComputeStereoMatches();
-
-        mvpMapPoints = vector<MapPoint*>(N,static_cast<MapPoint*>(NULL));
-        mvbOutlier = vector<bool>(N,false);
-
-
-        // This is done only for the first Frame (or after a change in the calibration)
-        if(mbInitialComputations)
-        {
-            ComputeImageBounds(imLeft);
-
-            mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/(mnMaxX-mnMinX);
-            mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/(mnMaxY-mnMinY);
-
-            fx = K.at<float>(0,0);
-            fy = K.at<float>(1,1);
-            cx = K.at<float>(0,2);
-            cy = K.at<float>(1,2);
-            invfx = 1.0f/fx;
-            invfy = 1.0f/fy;
-
-            mbInitialComputations=false;
-        }
-
-        mb = mbf/fx;
-
-        AssignFeaturesToGrid();
-    }
-
-//RGB-D 初始化frame
-    Frame::Frame(const cv::Mat &imGray,const double &timeStamp, const cv::Mat &imDepth,  ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
-            :mpORBvocabulary(voc),mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
-             mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
-    {
-        // Frame ID
-        mnId=nNextId++;
-
-        // Scale Level Info
-        mnScaleLevels = mpORBextractorLeft->GetLevels();
-        mfScaleFactor = mpORBextractorLeft->GetScaleFactor();
-        mfLogScaleFactor = log(mfScaleFactor);
-        mvScaleFactors = mpORBextractorLeft->GetScaleFactors();
-        mvInvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
-        mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
-        mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
-
-        fx = K.at<float>(0,0);
-        fy = K.at<float>(1,1);
-        cx = K.at<float>(0,2);
-        cy = K.at<float>(1,2);
-        invfx = 1.0f/fx;
-        invfy = 1.0f/fy;
-
-        cv::Mat tmpK = (cv::Mat_<double>(3,3)<< fx, 0, cx,
-                0, fy, cy,
-                0,0,1);
-        dealWithLine=false;//默认情况下，不使用线特征
-
-        ExtractORB(0,imGray);
-
-        N = mvKeys.size();
-        //NL=0;//没有线特征
-        featureSelect(imGray);
-        cout<<"dealwithline frame"<<dealWithLine<<endl;
-
-        NL=0;
-        if(dealWithLine)
-        {
-            ExtractLSD(imGray);
-            //cout<<"Frame: number of lines"<<mvKeylinesUn.size()<<endl;
-            isLineGood(imGray,imDepth,tmpK);
-            NL=mvKeylinesUn.size();
-            cout<<"Frame, NL"<<NL<<endl;
-        }
-
-
-        if(mvKeys.empty())
-            return;
-
-        UndistortKeyPoints();
-
-        ComputeStereoFromRGBD(imDepth);
-
-        mvpMapPoints = vector<MapPoint*>(N,static_cast<MapPoint*>(NULL));
-        mvpMapLines=vector<MapLine *>(NL,static_cast<MapLine*>(NULL));
-        mvbOutlier = vector<bool>(N,false);
-        mvbLineOutlier=vector<bool>(NL,false);
-
-
-
-        // This is done only for the first Frame (or after a change in the calibration)
-        if(mbInitialComputations)
-        {
-            ComputeImageBounds(imGray);
-
-            mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/static_cast<float>(mnMaxX-mnMinX);
-            mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/static_cast<float>(mnMaxY-mnMinY);
-
-            fx = K.at<float>(0,0);
-            fy = K.at<float>(1,1);
-            cx = K.at<float>(0,2);
-            cy = K.at<float>(1,2);
-            invfx = 1.0f/fx;
-            invfy = 1.0f/fy;
-
-            mbInitialComputations=false;
-        }
-
-        mb = mbf/fx;
-
-        AssignFeaturesToGrid();
     }
 
 
@@ -219,7 +76,6 @@ namespace StructureSLAM
         mvInvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
         mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
         mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
-
         // ORB and LSD extraction
         ExtractORB(0,imGray);
         ExtractLSD(imGray);
@@ -231,20 +87,6 @@ namespace StructureSLAM
             return;
 
         UndistortKeyPoints();
-
-
-        //TODO 获取surface normal的信息
-        //cout<<timeStamp<<"/home/yan/Documents/1_research/Manhanttan-master/ICL-NUIMdataset/lr_k0/normals/"+std::to_string(int(timeStamp))+".png"<<endl;
-        //cv::Mat imNormal=cv::imread("/home/yan/Documents/1_research/Manhanttan-master/ICL-NUIMdataset/lr_k0/normals/"+std::to_string(int(timeStamp))+".png");
-        //cv::Mat imNormal=cv::imread("/home/yan/Documents/1_research/2_cnn-slam/DataProcess/normals_stfar_exr/"+std::to_string(mTimeStamp)+".exr", cv::IMREAD_UNCHANGED);
-
-        //cout<< imNormal<<endl;
-        //cv::imwrite("normal.png",imNormal);
-
-
-
-        //TODO 计算 vanishing direction of lines
-
 
         // Set no stereo information
         mvuRight = vector<float>(N,-1);

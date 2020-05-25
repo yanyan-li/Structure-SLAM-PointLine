@@ -43,11 +43,11 @@ chmod +x build.sh
 
 ## Run on ICL NUIM dataset
 
-1. Download a sequence and uncompress it to `PATH_TO_SEQUENCE_FOLDER`.
+1. Download a sequence [here](https://drive.google.com/open?id=12rgrg92CFt7DcdTO4a7tthqbVKsmcfGn) and uncompress it to `PATH_TO_SEQUENCE_FOLDER`.
 
 2. Execute the following command. 
 ```
-./Examples/Structure-SLAM Vocabulary/ORBvoc.txt Examples/TUMX.yaml PATH_TO_SEQUENCE_FOLDER
+./Examples/Structure-SLAM Vocabulary/ORBvoc.txt Examples/ICL.yaml PATH_TO_SEQUENCE_FOLDER
 ```
 
 # Acknowledgements
