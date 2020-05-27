@@ -5,10 +5,12 @@ Structure-SLAM is a real-time monocular SLAM library that computes the camera tr
 
 # 1. License
 
-Structure-SLAM is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). For a list of all code/library dependencies (and associated licenses), please see [Dependencies.md](https://github.com/raulmur/StructureSLAM/blob/master/Dependencies.md).
+Structure-SLAM is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). 
+
+For a closed-source version of Structure-SLAM for commercial purposes, please contact the us.
 
 # 2. Prerequisites
-We have tested the library in **Ubuntu 12.04**, **14.04** and **16.04**, but it should be easy to compile in other platforms. A powerful computer (e.g. i7) will ensure real-time performance and provide more stable and accurate results.
+We have tested the library in **Ubuntu** **16.04**, but it should be easy to compile in other platforms. A powerful computer (e.g. i7) will ensure real-time performance and provide more stable and accurate results.
 
 ## C++11 or C++0x Compiler
 We use the new thread and chrono functionalities of C++11.
@@ -36,20 +38,28 @@ git clone https://github.com/yanyan-li/Structure-SLAM.git
 
 We provide a script `build.sh` to build the *Thirdparty* libraries and *Structure-SLAM*. Please make sure you have installed all required dependencies (see section 2). Execute:
 ```
-cd StructureSLAM
+cd Structure-SLAM
 chmod +x build.sh
 ./build.sh
 ```
 
 ## Run on ICL NUIM dataset
 
-1. Download a sequence [here](https://drive.google.com/open?id=12rgrg92CFt7DcdTO4a7tthqbVKsmcfGn) and uncompress it to `PATH_TO_SEQUENCE_FOLDER`.
+1. Prepare a dataset to PATH_TO_SEQUENCE_FOLDER, which contains  RGB images, normal maps.
+```
+RGB File
+Normal File
+associations.txt
+```
+*You can train your own network for normal prediction or download the our normal prediction results for testing, which can be found [here](https://drive.google.com/open?id=12rgrg92CFt7DcdTO4a7tthqbVKsmcfGn) or in Examples/dataset.*
 
 2. Execute the following command. 
+
 ```
 ./Examples/Structure-SLAM Vocabulary/ORBvoc.txt Examples/ICL.yaml PATH_TO_SEQUENCE_FOLDER
 ```
 
 # Acknowledgements
 
-We thank [Raul Mur-Artal](https://github.com/raulmurfor) for his impressive work, [**ORB-SLAM**](https://github.com/raulmur/ORB_SLAM). 
+We thank [Raul Mur-Artal](https://github.com/raulmurfor) for his impressive work, [**ORB-SLAM2**](https://github.com/raulmur/ORB_SLAM), which is a completed feature-based SLAM system.   
+
