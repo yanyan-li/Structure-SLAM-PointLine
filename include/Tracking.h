@@ -1,8 +1,13 @@
 /**
+* This file is part of Structure-SLAM.
+*
+*
+*/
+/**
 * This file is part of ORB-SLAM2.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/StructureSLAM>
+* For more information see <https://github.com/raulmur/ORB_SLAM2>
 *
 * ORB-SLAM2 is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -17,7 +22,6 @@
 * You should have received a copy of the GNU General Public License
 * along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
 */
-
 
 #ifndef TRACKING_H
 #define TRACKING_H
@@ -71,22 +75,13 @@ public:
              KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor);
 
     // Preprocess the input and call Track(). Extract features and performs stereo matching.
-    cv::Mat GrabImageStereo(const cv::Mat &imRectLeft,const cv::Mat &imRectRight, const double &timestamp);
-    cv::Mat GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp);
-    cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
     cv::Mat GrabImageMonocularWithNormal(const cv::Mat &im,const cv::Mat &normal,  const double &timestamp);
     void SetLocalMapper(LocalMapping* pLocalMapper);
     void SetLoopClosing(LoopClosing* pLoopClosing);
     void SetViewer(Viewer* pViewer);
 
-    // Load new settings
-    // The focal lenght should be similar or scale prediction will fail when projecting points
-    // TODO: Modify MapPoint::PredictScale to take into account focal lenght
-    void ChangeCalibration(const string &strSettingPath);
-
     // Use this function if you have deactivated local mapping and you only want to localize the camera.
     void InformOnlyTracking(const bool &flag);
-    double computeCornerAngle();
 
 public:
 
@@ -144,21 +139,13 @@ protected:
     // Main tracking function. It is independent of the input sensor.
     void Track();
     void TrackWithNormal();
-    // Map initialization for stereo and RGB-D
-    void StereoInitialization();
 
-    // Map initialization for monocular
-    void MonocularInitialization();
     void MonocularInitializationWithNormal();
-
-    void CreateInitialMapMonocular();
     void CreateInitialMapMonoWithLine();
-
     cv::Mat SeekManhattanFrame(vector<SurfaceNormal> &vTempSurfaceNormal,vector<FrameLine> &vVanishingDirection);
 
-    cv::Mat ClusterMultiManhattanFrame(vector<cv::Mat> &vRotationCandidate,double &clusterRatio);
-    vector<vector<int>> EasyHist(vector<float> &vDistance,int &histStart,float &histStep,int&histEnd);
-    cv::Mat ProjectSN2MF(int a,const cv::Mat &R_cm,const vector<SurfaceNormal> &vTempSurfaceNormal,vector<FrameLine> &vVanishingDirection);
+
+
     ResultOfMS ProjectSN2MF(int a,const cv::Mat &R_mc,const vector<SurfaceNormal> &vTempSurfaceNormal,vector<FrameLine> &vVanishingDirection,const int numOfSN);
     axiSNV ProjectSN2Conic(int a,const cv::Mat &R_mc,const vector<SurfaceNormal> &vTempSurfaceNormal,vector<FrameLine> &vVanishingDirection);
     cv::Mat TrackManhattanFrame(cv::Mat &mLastRcm,vector<SurfaceNormal> &vSurfaceNormal,vector<FrameLine> &vVanishingDirection);
@@ -269,10 +256,9 @@ protected:
 
     list<MapPoint*> mlpTemporalPoints;
     list<MapLine*>mlpTemporalLines;
-    
     shared_ptr<PointCloudMapping>  mpPointCloudMapping;
 };
 
-} //namespace ORB_SLAM
+} //namespace StructureSLAM
 
 #endif // TRACKING_H

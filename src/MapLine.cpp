@@ -1,36 +1,25 @@
-//
-// Created by lan on 17-12-20.
-//
-
+/**
+* This file is part of Structure-SLAM.
+*
+*
+*/
 #include "MapLine.h"
-
 #include <mutex>
 #include <include/LSDmatcher.h>
 #include <map>
+
+using namespace std;
+using namespace cv;
+using namespace cv::line_descriptor;
+using namespace Eigen;
 
 namespace StructureSLAM
 {
     mutex MapLine::mGlobalMutex;
     long unsigned int MapLine::nNextId=0;
-    long unsigned int MapLine::nNextCornerId=0;
 
-MapLine::MapLine(Vector6d &Pos, KeyFrame *pRefKF, Map *pMap):
-    mnFirstKFid(pRefKF->mnId), mnFirstFrame(pRefKF->mnFrameId), nObs(0), mnTrackReferenceForFrame(0),
-    mnLastFrameSeen(0), mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopLineForKF(0), mnCorrectedByKF(0),
-    mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(pRefKF), mnVisible(1), mnFound(1), mbBad(false),
-    mpReplaced(static_cast<MapLine*>(NULL)), mpMap(pMap)
-{
-    mWorldPos = Pos;
-
-    mNormalVector << 0, 0, 0;
-
-    // MapLines can be created from Tracking and Local Mapping. This mutex avoid conflicts with id.
-    unique_lock<mutex> lock(mpMap->mMutexPointCreation);
-    mnId = nNextId++;
-}
-
-    MapLine::MapLine(Vector6d &Pos, KeyFrame* pRefKF, Map* pMap,bool isCornerFrame):
-            mnFirstKFid(pRefKF->mnCornerId), mnFirstFrame(pRefKF->mnFrameId), nObs(0), mnTrackReferenceForFrame(0),
+    MapLine::MapLine(Vector6d &Pos, KeyFrame *pRefKF, Map *pMap):
+            mnFirstKFid(pRefKF->mnId), mnFirstFrame(pRefKF->mnFrameId), nObs(0), mnTrackReferenceForFrame(0),
             mnLastFrameSeen(0), mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopLineForKF(0), mnCorrectedByKF(0),
             mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(pRefKF), mnVisible(1), mnFound(1), mbBad(false),
             mpReplaced(static_cast<MapLine*>(NULL)), mpMap(pMap)
@@ -41,42 +30,42 @@ MapLine::MapLine(Vector6d &Pos, KeyFrame *pRefKF, Map *pMap):
 
         // MapLines can be created from Tracking and Local Mapping. This mutex avoid conflicts with id.
         unique_lock<mutex> lock(mpMap->mMutexPointCreation);
-        mnCornerId = nNextCornerId++;
+        mnId = nNextId++;
     }
 
-MapLine::MapLine(Vector6d &Pos, Map *pMap, Frame *pFrame, const int &idxF):
-    mnFirstKFid(-1), mnFirstFrame(pFrame->mnId), nObs(0), mnTrackReferenceForFrame(0), mnLastFrameSeen(0),
-    mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopLineForKF(0), mnCorrectedByKF(0),
-    mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(static_cast<KeyFrame*>(NULL)), mnVisible(1),
-    mnFound(1), mbBad(false), mpReplaced(NULL), mpMap(pMap)
-{
-    mWorldPos = Pos;
-    Mat Ow = pFrame->GetCameraCenter(); //相机光心坐标
-    Vector3d OW;
-    OW << Ow.at<double>(0), Ow.at<double>(1), Ow.at<double>(2);
-    mStart3D = Pos.head(3);
-    mEnd3D = Pos.tail(3);
-    Vector3d midPoint = 0.5*(mStart3D + mEnd3D);
-    mNormalVector = midPoint - OW; //世界坐标系下，相机到线段中点的向量
+    MapLine::MapLine(Vector6d &Pos, Map *pMap, Frame *pFrame, const int &idxF):
+            mnFirstKFid(-1), mnFirstFrame(pFrame->mnId), nObs(0), mnTrackReferenceForFrame(0), mnLastFrameSeen(0),
+            mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopLineForKF(0), mnCorrectedByKF(0),
+            mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(static_cast<KeyFrame*>(NULL)), mnVisible(1),
+            mnFound(1), mbBad(false), mpReplaced(NULL), mpMap(pMap)
+    {
+        mWorldPos = Pos;
+        Mat Ow = pFrame->GetCameraCenter();
+        Vector3d OW;
+        OW << Ow.at<double>(0), Ow.at<double>(1), Ow.at<double>(2);
+        mStart3D = Pos.head(3);
+        mEnd3D = Pos.tail(3);
+        Vector3d midPoint = 0.5*(mStart3D + mEnd3D);
+        mNormalVector = midPoint - OW;
 //    mNormalVector = mNormalVector/mNormalVector.norm();  //世界坐标系下，相机到3D点的单位向量
-    mNormalVector.normalize();
+        mNormalVector.normalize();
 
-    Vector3d PC = midPoint - OW;
-    const float dist = PC.norm();   //相机光心到线段中点的距离
+        Vector3d PC = midPoint - OW;
+        const float dist = PC.norm();   //相机光心到线段中点的距离
 
-    const int level = pFrame->mvKeylinesUn[idxF].octave;
-    const float levelScaleFactor = pFrame->mvScaleFactors[level];
-    const int nLevels = pFrame->mnScaleLevels;
+        const int level = pFrame->mvKeylinesUn[idxF].octave;
+        const float levelScaleFactor = pFrame->mvScaleFactors[level];
+        const int nLevels = pFrame->mnScaleLevels;
 
-    mfMaxDistance = dist*levelScaleFactor;
-    mfMinDistance = mfMaxDistance/pFrame->mvScaleFactors[nLevels-1];
+        mfMaxDistance = dist*levelScaleFactor;
+        mfMinDistance = mfMaxDistance/pFrame->mvScaleFactors[nLevels-1];
 
-    pFrame->mLdesc.row(idxF).copyTo(mLDescriptor);
+        pFrame->mLdesc.row(idxF).copyTo(mLDescriptor);
 
-    // MapLines can be created from Tracking and Local Mapping. This mutex avoid conflicts with id.
-    unique_lock<mutex> lock(mpMap->mMutexLineCreation);
-    mnId = nNextId++;
-}
+        // MapLines can be created from Tracking and Local Mapping. This mutex avoid conflicts with id.
+        unique_lock<mutex> lock(mpMap->mMutexLineCreation);
+        mnId = nNextId++;
+    }
 
 
     void MapLine::SetWorldPos(const Vector6d &Pos)
@@ -109,10 +98,10 @@ MapLine::MapLine(Vector6d &Pos, Map *pMap, Frame *pFrame, const int &idxF):
         unique_lock<mutex> lock(mMutexFeatures);
         if(mObservations.count(pKF))
             return;
-        //记录下能观测到该MapLine的KF和该MapPoint在KF中的索引
+
         mObservations[pKF]=idx;
 
-        nObs++;     //单目
+        nObs++;
     }
 
     void MapLine::EraseObservation(KeyFrame *pKF)
@@ -122,19 +111,12 @@ MapLine::MapLine(Vector6d &Pos, Map *pMap, Frame *pFrame, const int &idxF):
             unique_lock<mutex> lock(mMutexFeatures);
             if(mObservations.count(pKF))
             {
-                int idx = mObservations[pKF];
-                if(pKF->mvuRight[idx]>=0)
-                    nObs-=2;
-                else
-                    nObs--;
-
                 mObservations.erase(pKF);
+                nObs--;
 
-                // 如果该keyFrame是参考帧，该Frame被删除后重新指定RefFrame
                 if(mpRefKF==pKF)
                     mpRefKF=mObservations.begin()->first;
 
-                // 当观测到该特征线的相机数目少于2时，丢弃该点
                 if(nObs<=2)
                     bBad=true;
             }
@@ -171,7 +153,6 @@ MapLine::MapLine(Vector6d &Pos, Map *pMap, Frame *pFrame, const int &idxF):
         return (mObservations.count(pKF));
     }
 
-    //告知可以观测到该MapLine的Frame,该MapLine已经被删除
     void MapLine::SetBadFlag()
     {
         map<KeyFrame*, size_t> obs;
@@ -179,20 +160,19 @@ MapLine::MapLine(Vector6d &Pos, Map *pMap, Frame *pFrame, const int &idxF):
             unique_lock<mutex> lock1(mMutexFeatures);
             unique_lock<mutex> lock2(mMutexPos);
             mbBad=true;
-            obs = mObservations;    //把mObservations转存到obs，obs和mObservations里存的是指针，赋值过程为浅拷贝
-            mObservations.clear();  //把mObservations指向的内存释放，obs作为局部变量之后自动删除
+            obs = mObservations;
+            mObservations.clear();
         }
 
-        for(map<KeyFrame*, size_t>::iterator mit=obs.begin(), mend=obs.end(); mit!=mend; mit++)
+        for(auto & ob : obs)
         {
-            KeyFrame* pKF = mit->first;
-            pKF->EraseMapLineMatch(mit->second);    //告诉可以观测到该MapLine的KeyFrame，该MapLine被删除了
+            KeyFrame* pKF = ob.first;
+            pKF->EraseMapLineMatch(ob.second);
         }
 
-        mpMap->EraseMapLine(this);  //擦除该MapLine申请的内存
+        mpMap->EraseMapLine(this);
     }
 
-    //没有经过MapLineCulling检测的MapLines
     bool MapLine::isBad()
     {
         unique_lock<mutex> lock(mMutexFeatures);
@@ -218,7 +198,6 @@ MapLine::MapLine(Vector6d &Pos, Map *pMap, Frame *pFrame, const int &idxF):
             mpReplaced = pML;
         }
 
-        // 所有能观测到该MapLine的keyframe都要替换
         for(map<KeyFrame*, size_t>::iterator mit=obs.begin(), mend=obs.end(); mit!=mend; mit++)
         {
             KeyFrame* pKF = mit->first;

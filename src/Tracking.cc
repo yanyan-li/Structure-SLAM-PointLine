@@ -1,8 +1,13 @@
 /**
+* This file is part of Structure-SLAM.
+*
+*
+*/
+/**
 * This file is part of ORB-SLAM2.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/StructureSLAM>
+* For more information see <https://github.com/raulmur/ORB_SLAM2>
 *
 * ORB-SLAM2 is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -18,29 +23,20 @@
 * along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include "Tracking.h"
-
 #include <opencv2/core/core.hpp>
 #include <opencv2/core/eigen.hpp>
-#include <opencv2/features2d/features2d.hpp>
-         
 #include "ORBmatcher.h"
 #include "FrameDrawer.h"
 #include "Converter.h"
 #include "Map.h"
 #include "Initializer.h"
-         
 #include "Optimizer.h"
 #include "PnPsolver.h"
-
 #include <iostream>
-
 #include <mutex>
 
-
 using namespace std;
-
 namespace StructureSLAM
 {
 Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Map *pMap, KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor):
@@ -76,21 +72,14 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     }
     DistCoef.copyTo(mDistCoef);
 
-    // 自己添加的，获取img的width和height
     int img_width = fSettings["Camera.width"];
     int img_height = fSettings["Camera.height"];
-
     cout << "img_width = " << img_width << endl;
     cout << "img_height = " << img_height << endl;
-
-    // 自己添加的，在这里先得到映射值
     initUndistortRectifyMap(mK, mDistCoef, Mat_<double>::eye(3,3), mK, Size(img_width, img_height), CV_32F, mUndistX, mUndistY);
-
     cout << "mUndistX size = " << mUndistX.size << endl;
     cout << "mUndistY size = " << mUndistY.size << endl;
-
     mbf = fSettings["Camera.bf"];
-
     float fps = fSettings["Camera.fps"];
     if(fps==0)
         fps=30;
@@ -122,7 +111,6 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
         cout << "- color order: BGR (ignored if grayscale)" << endl;
 
     // Load ORB parameters
-
     int nFeatures = fSettings["ORBextractor.nFeatures"];
     float fScaleFactor = fSettings["ORBextractor.scaleFactor"];
     int nLevels = fSettings["ORBextractor.nLevels"];
@@ -130,12 +118,7 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     int fMinThFAST = fSettings["ORBextractor.minThFAST"];
 
     mpORBextractorLeft = new ORBextractor(nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
-
-    if(sensor==System::STEREO)
-        mpORBextractorRight = new ORBextractor(nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
-
-    if(sensor==System::MONOCULAR)
-        mpIniORBextractor = new ORBextractor(2*nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
+    mpIniORBextractor = new ORBextractor(2*nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
 
     cout << endl  << "ORB Extractor Parameters: " << endl;
     cout << "- Number of Features: " << nFeatures << endl;
@@ -143,22 +126,6 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     cout << "- Scale Factor: " << fScaleFactor << endl;
     cout << "- Initial Fast Threshold: " << fIniThFAST << endl;
     cout << "- Minimum Fast Threshold: " << fMinThFAST << endl;
-
-    if(sensor==System::STEREO || sensor==System::RGBD)
-    {
-        mThDepth = mbf*(float)fSettings["ThDepth"]/fx;
-        cout << endl << "Depth Threshold (Close/Far Points): " << mThDepth << endl;
-    }
-
-    if(sensor==System::RGBD)
-    {
-        mDepthMapFactor = fSettings["DepthMapFactor"];
-        if(fabs(mDepthMapFactor)<1e-5)
-            mDepthMapFactor=1;
-        else
-            mDepthMapFactor = 1.0f/mDepthMapFactor;
-    }
-
 }
 
 void Tracking::SetLocalMapper(LocalMapping *pLocalMapper)
@@ -195,18 +162,12 @@ cv::Mat Tracking::GrabImageMonocularWithNormal(const cv::Mat &im,const cv::Mat &
         else
             cvtColor(mImGray,mImGray,CV_BGRA2GRAY);
     }
-
-    //TODO 纠正畸变
-    //cv::remap(mImGray, mImGray, mUndistX, mUndistY, cv::INTER_LINEAR);
-    //mImGray = mImGray(Rect(15, 15, 610, 450));
-
     if(mState==NOT_INITIALIZED || mState==NO_IMAGES_YET)
         mCurrentFrame = Frame(mImGray,mNormal,timestamp,mpIniORBextractor,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
     else
         mCurrentFrame = Frame(mImGray,mNormal,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
 
     TrackWithNormal();
-
     return mCurrentFrame.mTcw.clone();
 }
 
@@ -222,7 +183,6 @@ void Tracking::TrackWithNormal()
 
     // Get Map Mutex -> Map cannot be changed
     unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
-
     if(mState==NOT_INITIALIZED)
     {
         //Manhattan initialization
@@ -231,10 +191,9 @@ void Tracking::TrackWithNormal()
         if(mState!=OK)
             return;
     }
-    else  //完成初始化之后
+    else  //after initialization
     {
         //Tracking: system is initialized
-        // bOK是临时变量，用于表示每个函数是否执行成功
         bool bOK;
         // Initial camera pose estimation using motion model or relocalization (if tracking is lost)
         if(!mbOnlyTracking)
@@ -248,7 +207,6 @@ void Tracking::TrackWithNormal()
                 cv ::Mat mRotation_wc1= cv::Mat::zeros(cv::Size(3,3),CV_32F);
 
                 MF_can=TrackManhattanFrame(mLastRcm,mCurrentFrame.vSurfaceNormal,mCurrentFrame.mVF3DLines).clone();
-                //cv::Mat R_cm=ClusterMMF(MF_can);
                 //MF_can_T = mLastRcm.t();
                 //mRotation_wc=Rotation_cm*MF_can_T;
                 //mRotation_wc1=mRotation_wc.t();  //R_k-1,1
@@ -277,47 +235,33 @@ void Tracking::TrackWithNormal()
                 }
                 else
                 {
-
                     bOK = TrackReferenceKeyFrame();
                     if(bOK)  bManhattanGood = true;
-
                 }
-
                 if(!bManhattanGood)
                 {
                     bOK = Relocalization();
                     if(bOK) bManhattanGood= true;
                 }
-
-
             }
-
-
-
             if(mState==OK)
             {
                 // Local Mapping might have changed some MapPoints tracked in last frame
                 CheckReplacedInLastFrame();
-
-
                 //compute translation
                 if(mVelocity.empty() || mCurrentFrame.mnId<mnLastRelocFrameId+2)
                 {
                     cout<<"tracking: in reference"<<endl;
                     bOK = TrackReferenceKeyFrame();
-
                 }
                 else
                 {
-
-                    //else
                     {
                         if(!bManhattanGood)
                         bOK = TrackWithMotionModel();
                         //fix manhattan pose
                         //UpdateManhattanPose();
                     }
-
                     if(!bOK)
                         bOK = TrackReferenceKeyFrame();
                 }
@@ -326,20 +270,15 @@ void Tracking::TrackWithNormal()
             {
                 bOK = Relocalization();
             }
-
         }
 
         mCurrentFrame.mpReferenceKF = mpReferenceKF;
 
-//        ofstream file("TrackLocalMapTime.txt", ios::app);
-//        chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
-        //-----------------------------------step 2.2-------------------------------------------------
-        // If we have an initial estimation of the camera pose and matching. Track the local map.
+        //pose refinement
         if(!mbOnlyTracking)
         {
             if(bOK)
             {
-                cout<<"Tracking localmap with Lines"<<endl;
                 bOK=TrackLocalMap();
                 if(!bOK)
                     bOK = TrackLocalMapWithLines();
@@ -349,8 +288,6 @@ void Tracking::TrackWithNormal()
                 bOK=Relocalization();
             }
         }
-        cout<<"Tracking: finish localmap"<<endl;
-
         if(bOK)
             mState = OK;
         else
@@ -360,29 +297,21 @@ void Tracking::TrackWithNormal()
         mpFrameDrawer->Update(this);
 
         // If tracking were good, check if we insert a keyframe
-        cout<<"tracking: check if a keyframe "<<endl;
         if(bOK)
         {
-            //cout<<" tracking: Clean VO matches0"<<endl;
             // Update motion model
             if(!mLastFrame.mTcw.empty())
             {
-
-                // 更新恒速运动模型TrackWithMotionModel中的mVelocity
+                // update mVelocity
                 cv::Mat LastTwc = cv::Mat::eye(4,4,CV_32F);
-
                 mLastFrame.GetRotationInverse().copyTo(LastTwc.rowRange(0,3).colRange(0,3));
-
                 mLastFrame.GetCameraCenter().copyTo(LastTwc.rowRange(0,3).col(3));
-
                 mVelocity = mCurrentFrame.mTcw*LastTwc;
-
             }
             else
                 mVelocity = cv::Mat();
 
             mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
-            //cout<<" tracking: Clean VO matches1"<<endl;
             for(int i=0; i<mCurrentFrame.N; i++)
             {
                 MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];
@@ -416,13 +345,11 @@ void Tracking::TrackWithNormal()
                 MapLine* pML = *lit;
                 delete pML;
             }
-            //cout<<" tracking: Clean VO matches3"<<endl;
             mlpTemporalPoints.clear();
             mlpTemporalLines.clear();
             // Check if we need to insert a new keyframe
             if(NeedNewKeyFrame())
             {
-                cout << endl << "Tracking create new kf " << endl;
                 CreateNewKeyFrame();
             }
 
@@ -443,7 +370,6 @@ void Tracking::TrackWithNormal()
                     mCurrentFrame.mvpMapLines[i]= static_cast<MapLine*>(NULL);
             }
         }
-        cout<<" tracking: Clean1"<<endl;
         // Reset if the camera get lost soon after initialization
         if(mState==LOST)
         {
@@ -487,8 +413,6 @@ void Tracking::TrackWithNormal()
 void Tracking::MonocularInitializationWithNormal()
 {
     int num=50;
-    cout<<"Tracking: number of points:"<<mCurrentFrame.mvKeys.size()<<endl;
-
     if(!mpInitializer)
     {
         if(mCurrentFrame.mvKeys.size()>num)
@@ -503,8 +427,6 @@ void Tracking::MonocularInitializationWithNormal()
             cv ::Mat MF_can_T= cv::Mat::zeros(cv::Size(3,3),CV_32F);
             MF_can=TrackManhattanFrame(Rotation_cm,mCurrentFrame.vSurfaceNormal,mCurrentFrame.mVF3DLines).clone();
             MF_can.copyTo(mLastRcm);//.clone();
-            //Rotation_cm.copyTo(mLastRcm);// .clone();
-
             mvbPrevMatched.resize(mCurrentFrame.mvKeysUn.size());
             for(size_t i=0;i<mCurrentFrame.mvKeysUn.size();i++)
                 mvbPrevMatched[i]=mCurrentFrame.mvKeysUn[i].pt;
@@ -514,7 +436,6 @@ void Tracking::MonocularInitializationWithNormal()
             mpInitializer=new Initializer(mCurrentFrame,1.0,200);
 
             fill(mvIniMatches.begin(),mvIniMatches.end(),-1);
-            cout<<"Tracking: the first image"<<endl;
             return;
         }
     }
@@ -534,7 +455,6 @@ void Tracking::MonocularInitializationWithNormal()
         int nmatches =matcher.SearchForInitialization(mInitialFrame,mCurrentFrame,mvbPrevMatched,mvIniMatches,100);
         int nlineMatches = lmatcher.SerachForInitialize(mInitialFrame, mCurrentFrame, mvLineMatches);
 
-        cout<<"Tracking: point and line matches:"<<nmatches<<", "<<nlineMatches<<endl;
         if(nmatches<20 )
         {
             delete  mpInitializer;
@@ -553,12 +473,6 @@ void Tracking::MonocularInitializationWithNormal()
         MF_can.copyTo(mLastRcm);
         mRotation_cw = relatedPose.t();
 
-//        MF_can.copyTo(mLastRcm);//.clone();
-//        MF_can_T=MF_can.t();
-//        mRotation_wc=Rotation_cm*MF_can_T;   //mRotation_wc  就是一个 R12
-//        mRotation_cw=mRotation_wc.t();
-
-
         cout<<"Tracking: finish mf rotation"<<mRotation_wc<<endl;
         //获得 Rcw
         cv::Mat Rcw= cv::Mat::zeros(cv::Size(3,3),CV_32F);; // Current Camera Rotation
@@ -567,9 +481,7 @@ void Tracking::MonocularInitializationWithNormal()
 
         mRotation_cw.copyTo(Rcw);
 
-        //Rcw 就是 R21*/
-
-        cout<<"Tracking: initialize MW:"<<Rcw<<endl;
+        //Rcw is R21
         if(mpInitializer->InitializeManhattanWorld(mInitialFrame,mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated, mvLineMatches, mvLineS3D, mvLineE3D, mvbLineTriangulated))
         {
 
@@ -583,8 +495,6 @@ void Tracking::MonocularInitializationWithNormal()
                 }
             }
 
-            cout<<"Tracking: nmatches"<<nmatches<<endl;
-
             // Set Frame Poses
             // 将初始化的第一帧作为世界坐标系，因此第一帧变换矩阵为单位矩阵
             mInitialFrame.SetPose(cv::Mat::eye(4,4,CV_32F));
@@ -594,7 +504,6 @@ void Tracking::MonocularInitializationWithNormal()
             mCurrentFrame.SetPose(Tcw);
 
             // step6：将三角化得到的3D点包装成MapPoints
-            /// 如果要修改，应该是从这个函数开始
             //CreateInitialMapMonocular();
             CreateInitialMapMonoWithLine();
         }
@@ -602,7 +511,6 @@ void Tracking::MonocularInitializationWithNormal()
     }
 
 }
-
 bool Tracking::TranslationWithMotionModel(cv::Mat &relatedPose)
 {
     ///cout<<"Tracking: with motion model"<<endl;
@@ -631,8 +539,7 @@ bool Tracking::TranslationWithMotionModel(cv::Mat &relatedPose)
     int nmatches = matcher.SearchByProjection(mCurrentFrame,mLastFrame,th,mSensor==System::MONOCULAR);
 
     cout<<"translation motion model：point matches1:"<<nmatches<<endl;
-    int lmatches = lmatcher.SearchByProjection(mCurrentFrame, mLastFrame);
-//    int lmatches2=0;
+    int lmatches = lmatcher.SearchByProjection(mCurrentFrame, mLastFrame, th, mSensor == System::MONOCULAR);//    int lmatches2=0;
 //    if(mCurrentFrame.dealWithLine)
 //    {
 //        fill(mCurrentFrame.mvpMapLines.begin(),mCurrentFrame.mvpMapLines.end(), static_cast<MapLine*>(NULL));
@@ -745,15 +652,10 @@ bool Tracking::TranslationWithMotionModel(cv::Mat &relatedPose)
                 else if(mCurrentFrame.mvpMapLines[i]->Observations()>0)
                     nmatchesLineMap++;
             }
-
         }
-
         mState = OK;
         return reliableManhattanR_wc;
-
-
     }
-
 }
 
 cv::Mat Tracking::SeekManhattanFrame(vector<SurfaceNormal> &vTempSurfaceNormal,vector<FrameLine> &vVanishingDirection)
@@ -944,13 +846,11 @@ axiSNV Tracking::ProjectSN2Conic(int a,const cv::Mat &R_mc,const vector<SurfaceN
     axiSNV tempaxiSNV;
     tempaxiSNV.axis=a;
 
-
     size_t sizeOfSurfaceNormal=vTempSurfaceNormal.size();//TODO 先去掉线 +vVanishingDirection.size();
     tempaxiSNV.SNVector.reserve(sizeOfSurfaceNormal);
     //cout<<"size of SN"<<sizeOfSurfaceNormal<<endl;
     for(size_t i=0;i<sizeOfSurfaceNormal;i++)
     {
-
         cv::Point3f n_ini;
         if(i<vTempSurfaceNormal.size())
         {
@@ -962,13 +862,9 @@ axiSNV Tracking::ProjectSN2Conic(int a,const cv::Mat &R_mc,const vector<SurfaceN
             //cout<<lambda<<endl;
             if(lambda<sin(0.2518)) //0.25
             {
-
                 //vSNCadidate.push_back(vTempSurfaceNormal[i]);
                 //numInConic++;
                 tempaxiSNV.SNVector.push_back(vTempSurfaceNormal[i]);
-
-
-
             }
         }
         else
@@ -984,19 +880,11 @@ axiSNV Tracking::ProjectSN2Conic(int a,const cv::Mat &R_mc,const vector<SurfaceN
             //cout<<lambda<<endl;
             if(lambda<sin(0.1518)) //0.25
             {
-
                 //vSNCadidate.push_back(vTempSurfaceNormal[i]);
                 //numInConic++;
                 tempaxiSNV.Linesvector.push_back(vVanishingDirection[tepSize]);
-
-
-
             }
-
         }
-
-
-
     }
 
     return tempaxiSNV;//numInConic;
@@ -1214,11 +1102,6 @@ sMS Tracking::MeanShift(vector<cv::Point2d> & v2D)
 }
 
 /**
- * @brief 为单目摄像头三角化生成MapPoints，只有特征点
- */
-
-#if 1
-/**
  * @brief 为单目摄像头三角化生成带有线特征的Map，包括MapPoints和MapLine
  */
 void Tracking::CreateInitialMapMonoWithLine()
@@ -1388,11 +1271,10 @@ void Tracking::CreateInitialMapMonoWithLine()
         mState = OK;
     }
 
-#endif
 
 void Tracking::CheckReplacedInLastFrame()
 {
-        // 点特征
+        // points
         for(int i =0; i<mLastFrame.N; i++)
         {
             MapPoint* pMP = mLastFrame.mvpMapPoints[i];
@@ -1406,8 +1288,7 @@ void Tracking::CheckReplacedInLastFrame()
                 }
             }
         }
-        // 线特征
-
+        // lines
         for(int i=0; i<mLastFrame.NL; i++)
         {
             MapLine* pML = mLastFrame.mvpMapLines[i];
@@ -1446,15 +1327,12 @@ bool Tracking::TrackReferenceKeyFrame()
         {   lmatches = lmatcher.SearchByProjection(mpReferenceKF,mCurrentFrame,vpMapLineMatches);
             mCurrentFrame.mvpMapLines=vpMapLineMatches;
             cout<<"Tracking REFERENCE lmatches:"<<lmatches<<endl;
-//            if(nmatches<15 &&lmatches<5)
-//                return false;
         }
         else
         {
             if(nmatches<15)
                 return false;
         }
-
 
         mCurrentFrame.mvpMapPoints = vpMapPointMatches;
 
@@ -1464,11 +1342,9 @@ bool Tracking::TrackReferenceKeyFrame()
             if(ml)
             {
                 Eigen::Vector3d line_obs=mCurrentFrame.mvKeyLineFunctions[i];
-                //cout<<"TRACKING i,line_obes"<<i<<","<<line_obs[0]<<","<<line_obs[1]<<","<<line_obs[2]<<endl;
-                //cout<<"tracking:"<<ml->mWorldPos[0]<<","<<ml->mWorldPos[1]<<","<<ml->mWorldPos[2]<<endl;
             }
         }
-        //mCurrentFrame.mvpMapLines=
+
         mCurrentFrame.SetPose(mLastFrame.mTcw);
         cout<<"tracking reference,pose before opti"<<mLastFrame.mTcw<<endl;
         // 通过优化3D-2D的重投影误差来获得位姿
@@ -1488,19 +1364,16 @@ bool Tracking::TrackReferenceKeyFrame()
                 if(mCurrentFrame.mvbOutlier[i])
                 {
                     MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];
-
                     mCurrentFrame.mvpMapPoints[i]=static_cast<MapPoint*>(NULL);
                     mCurrentFrame.mvbOutlier[i]=false;
                     pMP->mbTrackInView = false;
                     pMP->mnLastFrameSeen = mCurrentFrame.mnId;
                     nmatches--;
-
                 }
                 else if(mCurrentFrame.mvpMapPoints[i]->Observations()>0)
                     nmatchesMap++;
             }
         }
-
 
         //当 cMurrentFrame.dealWithLine为true，使用Pose去除错误的线
         for(int i=0;i<mCurrentFrame.NL;i++)
@@ -1519,10 +1392,8 @@ bool Tracking::TrackReferenceKeyFrame()
                 }
                 else if(mCurrentFrame.mvpMapLines[i]->Observations()>0)
                     nmatchesLineMap++;
-
             }
         }
-
         if(mCurrentFrame.dealWithLine)
             return  nmatchesMap>=10||nmatchesLineMap>=5;
         else
@@ -1530,12 +1401,6 @@ bool Tracking::TrackReferenceKeyFrame()
 }
 
 
-/**
- * @brief 双目或rgbd相机根据深度值为上一帧产生新的MapPoints
- *
- * 在双目和rgbd情况下，选取一些深度小一些的点（可靠一些）
- * 可以通过深度值产生一些新的MapPoints
- */
 void Tracking::UpdateLastFrame()
 {
         // Update pose according to reference keyframe
@@ -1562,8 +1427,6 @@ void Tracking::UpdateLastFrame()
             }
         }
 
-        //if(vDepthIdx.empty())
-        //    return;
 
         sort(vDepthIdx.begin(),vDepthIdx.end());
 
@@ -1646,15 +1509,6 @@ void Tracking::UpdateLastFrame()
 }
 
 
-/**
- * @brief 根据匀速模型对上一帧的MapPoints进行跟踪
- *
- * 1.非单目情况，需要对上一帧产生一些新的MapPoints(临时)
- * 2.将上一帧的MapPoints投影到当前帧的图像平面上，在投影的位置进行区域匹配
- * 3.根据匹配对估计当前帧的姿态
- * 4.根据姿态剔除误匹配
- * @return 如果匹配数大于10，则返回true
- */
 bool Tracking::TrackWithMotionModel()
 {
         cout<<"Tracking: with motion model"<<endl;
@@ -1688,16 +1542,6 @@ bool Tracking::TrackWithMotionModel()
         lmatches2 = lmatcher.SearchByProjection(mpReferenceKF,mCurrentFrame,vpMapLineMatches);
         mCurrentFrame.mvpMapLines=vpMapLineMatches;
     }
-        //vector<MapPoint*> vpMapPointMatches;
-
-        //  int nmatches1 = matcher.SearchByBoW(mpReferenceKF,mCurrentFrame,vpMapPointMatches);
-
-        //lmatcher.SearchByProjection(mCurrentFrame, mLastFrame.mvpMapLines, th);
-        //    cout << "tracking points = " << nmatches << endl;
-        //    cout << "tracking lmatches = " << lmatches << endl;
-
-        //double lmatch_ratio = lmatches*1.0/mCurrentFrame.mvKeylinesUn.size();
-        //    cout << "lmatch_ratio = " << lmatch_ratio << endl;
 
         // If few matches, uses a wider window search
         // 如果跟踪的点少，则扩大搜索半径再来一次
@@ -1717,16 +1561,6 @@ bool Tracking::TrackWithMotionModel()
                 return false;
         }
 
-    for(size_t i=0;i<mCurrentFrame.mvpMapLines.size();i++)
-    {
-        MapLine * ml=mCurrentFrame.mvpMapLines[i];
-        if(ml)
-        {
-            //Eigen::Vector3d line_obs=mCurrentFrame.mvKeyLineFunctions[i];
-            //cout<<"TRACKING i,line_obes"<<i<<","<<line_obs[0]<<","<<line_obs[1]<<","<<line_obs[2]<<endl;
-            //cout<<"tracking:"<<ml->mWorldPos[0]<<","<<ml->mWorldPos[1]<<","<<ml->mWorldPos[2]<<endl;
-        }
-    }
         // Optimize frame pose with all matches
         // --step5: 优化位姿
         cout<<"tracking motion model,pose before opti"<<mCurrentFrame.mTcw<<endl;
@@ -1778,8 +1612,6 @@ bool Tracking::TrackWithMotionModel()
 
         }
 
-
-
         if(mbOnlyTracking)
         {
             mbVO = nmatchesMap<10;
@@ -1794,79 +1626,58 @@ bool Tracking::TrackWithMotionModel()
         {
             return nmatchesMap>=10;
         }
-
 }
 
-/**
- * @brief 对Local Map的MapPoints进行跟踪
- * 1.更新局部地图，包括局部关键帧和关键点
- * 2.对局部MapPoints进行投影匹配
- * 3.根据匹配对估计当前帧的姿态
- * 4.根据姿态剔除误匹配
- * @return true if success
- */
-    bool Tracking::TrackLocalMap()
+bool Tracking::TrackLocalMap()
+{
+    // We have an estimation of the camera pose and some map points tracked in the frame.
+    // We retrieve the local map and try to find matches to points in the local map.
+
+    UpdateLocalMap();
+
+    SearchLocalPoints();
+
+    // Optimize Pose
+    Optimizer::PoseOptimization(&mCurrentFrame);
+    mnMatchesInliers = 0;
+
+    // Update MapPoints Statistics
+    for(int i=0; i<mCurrentFrame.N; i++)
     {
-        // We have an estimation of the camera pose and some map points tracked in the frame.
-        // We retrieve the local map and try to find matches to points in the local map.
-
-        UpdateLocalMap();
-
-        SearchLocalPoints();
-
-        // Optimize Pose
-        Optimizer::PoseOptimization(&mCurrentFrame);
-        mnMatchesInliers = 0;
-
-        // Update MapPoints Statistics
-        for(int i=0; i<mCurrentFrame.N; i++)
+        if(mCurrentFrame.mvpMapPoints[i])
         {
-            if(mCurrentFrame.mvpMapPoints[i])
+            if(!mCurrentFrame.mvbOutlier[i])
             {
-                if(!mCurrentFrame.mvbOutlier[i])
+                mCurrentFrame.mvpMapPoints[i]->IncreaseFound();
+                if(!mbOnlyTracking)
                 {
-                    mCurrentFrame.mvpMapPoints[i]->IncreaseFound();
-                    if(!mbOnlyTracking)
-                    {
-                        if(mCurrentFrame.mvpMapPoints[i]->Observations()>0)
-                            mnMatchesInliers++;
-                    }
-                    else
+                    if(mCurrentFrame.mvpMapPoints[i]->Observations()>0)
                         mnMatchesInliers++;
                 }
-                else if(mSensor==System::STEREO)
-                    mCurrentFrame.mvpMapPoints[i] = static_cast<MapPoint*>(NULL);
-
+                else
+                    mnMatchesInliers++;
             }
+            else if(mSensor==System::STEREO)
+                mCurrentFrame.mvpMapPoints[i] = static_cast<MapPoint*>(NULL);
+
         }
-
-        // Decide if the tracking was succesful
-        // More restrictive if there was a relocalization recently
-        if(mCurrentFrame.mnId<mnLastRelocFrameId+mMaxFrames && mnMatchesInliers<50)
-            return false;
-
-        if(mnMatchesInliers<10)
-            return false;
-        else
-            return true;
     }
 
-/**
- * @brief 类比TrackLocalMap函数，对局部地图的地图点和地图线进行跟踪
- * @return
- */
+    // Decide if the tracking was succesful
+    // More restrictive if there was a relocalization recently
+    if(mCurrentFrame.mnId<mnLastRelocFrameId+mMaxFrames && mnMatchesInliers<50)
+        return false;
+
+    if(mnMatchesInliers<10)
+        return false;
+    else
+        return true;
+}
+
+
 bool Tracking::TrackLocalMapWithLines()
 {
-        //cout<<"Tracking: track localmap with lines and points"<<endl;
-        // step1：更新局部关键帧mvpLocalKeyFrames和局部地图点mvpLocalMapPoints，局部地图线mvpLocalMapLines
         UpdateLocalMap();
-        //cout<<"Tracking: finish updatelocalmap"<<endl;
-
-//    // step2：在局部地图中查找与当前帧匹配的MapPoints
-//    SearchLocalPoints();
-//    // step3: 在局部地图中查找与当前帧匹配的MapLines
-//    SearchLocalLines();
-
         thread threadPoints(&Tracking::SearchLocalPoints, this);
         thread threadLines(&Tracking::SearchLocalLines, this);
         threadPoints.join();
@@ -1874,9 +1685,7 @@ bool Tracking::TrackLocalMapWithLines()
 
         //cout<<"Tracking: start Poseoptimization"<<endl;
         // step4：更新局部所有MapPoints和MapLines后对位姿再次优化
-        cout<<"tracking localmap,pose before opti"<<endl<<mCurrentFrame.mTcw<<endl;
         Optimizer::PoseOptimization(&mCurrentFrame);
-        cout<<"tracking localmap,pose after opti"<<mCurrentFrame.mTcw<<endl;
         mnMatchesInliers = 0;
         mnLineMatchesInliers = 0;
 
@@ -1899,11 +1708,8 @@ bool Tracking::TrackLocalMapWithLines()
                 }
                 else if(mSensor==System::STEREO)
                     mCurrentFrame.mvpMapPoints[i] = static_cast<MapPoint*>(NULL);
-
             }
         }
-        ///cout<<"Tracking: Maplines观测程度"<<endl;
-
         // 更新MapLines Statistics
         // step6：更新当前帧的MapLines被观测程度，并统计跟踪局部地图的效果
         for(int i=0; i<mCurrentFrame.NL; i++)
@@ -1925,14 +1731,8 @@ bool Tracking::TrackLocalMapWithLines()
                     mCurrentFrame.mvpMapLines[i] = static_cast<MapLine*>(NULL);
             }
         }
-        //cout<<"Tracking: finish Maplines观测程度"<<endl;
-        // Decide if the tracking was succesful
-        // More restrictive if there was a relocalization recently
-        // step7：决定是否跟踪成功
         if(mCurrentFrame.mnId<mnLastRelocFrameId+mMaxFrames && mnMatchesInliers<50)
             return false;
-
-
 
         if(mnMatchesInliers<30)
             return false;
@@ -2046,14 +1846,10 @@ void Tracking::CreateNewKeyFrame()
 {
     if(!mpLocalMapper->SetNotStop(true))
         return;
-    //所有的关键帧 都要提取线
-    cout<<"dealwithline"<<mCurrentFrame.dealWithLine<<endl;
     if(!mCurrentFrame.dealWithLine)
     {
-        cout<<"Tracking, non-blur  image NL"<<mCurrentFrame.NL<<endl;
         if(mCurrentFrame.NL==0)
         {
-            cout<<"Tracking, extract lines for the current frame"<<endl;
             LineSegment* mpLineSegment;
             mpLineSegment->ExtractLineSegment(this->mImGray, mCurrentFrame.mvKeylinesUn, mCurrentFrame.mLdesc, mCurrentFrame.mvKeyLineFunctions);
             mCurrentFrame.mvDepthLine = vector<float>(mCurrentFrame.mvKeylinesUn.size(),-1.0f);
@@ -2062,9 +1858,6 @@ void Tracking::CreateNewKeyFrame()
                 double len = cv::norm(mCurrentFrame.mvKeylinesUn[i].getStartPoint() - mCurrentFrame.mvKeylinesUn[i].getEndPoint());
                 vector<cv::Point3d> pts3d;
                 double numSmp = (double) min((int)len, 100); //number of line points sampled
-
-                //cout<<"numSmp:"<<numSmp<<endl;
-
                 pts3d.reserve(numSmp);//预留数量
 
                 for(int j=0; j<=numSmp; ++j) {
@@ -2072,8 +1865,6 @@ void Tracking::CreateNewKeyFrame()
                     // assuming position (0,0) is the top-left corner of image, then the
                     // top-left pixel's center would be (0.5,0.5)
                     cv::Point2d pt = mCurrentFrame.mvKeylinesUn[i].getStartPoint() * (1-j/numSmp) + mCurrentFrame.mvKeylinesUn[i].getEndPoint()* (j/numSmp);
-
-                    //cout<<"pt"<<pt.x<<","<<pt.y<<endl;
                     if(pt.x<0 || pt.y<0 || pt.x >= this->mImDepth.cols || pt.y >= this->mImDepth.rows ) continue;
                     int row, col; // nearest pixel for pt
                     if((floor(pt.x) == pt.x) && (floor(pt.y) == pt.y)) {// boundary issue
@@ -2083,7 +1874,6 @@ void Tracking::CreateNewKeyFrame()
                         col = int(pt.x);
                         row = int(pt.y);
                     }
-                    //cout<<"col:"<<col<<","<<"row:"<<row<<endl;
                     float d=-1;
                     if(this->mImGray.at<float>(row,col) <=0.01) { // no depth info
                         //cout<<"no depth info"<<endl;
@@ -2094,16 +1884,11 @@ void Tracking::CreateNewKeyFrame()
                     }
                     cv::Point3d p;
 
-                    //cout<<"col:"<<col<<", row:"<<row<<endl;
-                    //cout<<"cx:"<<cx<<",fx"<<fx<<endl;
                     // 计算这个点的空间坐标
                     p.z = d;
                     p.x = (col - mCurrentFrame.cx) * p.z *mCurrentFrame.invfx;//K.at<float>(0,0);//invfx;
                     p.y = (row - mCurrentFrame.cy) * p.z *mCurrentFrame.invfy;//K.at<float>(1,1);//invfy;
-                    //cout<<"x:"<<p.x<<",y:"<<p.y<<",z:"<<p.z<<endl;
 
-                    //mv3DLineforMap.push_back(p);
-                    //origPoints_xyzrgb<<p.x<<" "<<p.y<<" "<<p.z<<endl;
                     pts3d.push_back(p);
 
                 }
@@ -2115,12 +1900,9 @@ void Tracking::CreateNewKeyFrame()
 #if 1
                 vector<RandomPoint3d> rndpts3d;
                 rndpts3d.reserve(pts3d.size());
-                //cout<<"pts3d size:"<<pts3d.size()<<endl;
                 // compute uncertainty of 3d points
                 for(int j=0; j<pts3d.size();++j) {
-                    //cout<<"ptsxyz"<<pts3d[j].x<<","<<pts3d[j].y<<","<<pts3d[j].z<<endl;
                     rndpts3d.push_back(compPt3dCov(pts3d[j], mCurrentFrame.mK, 1));
-                    //cout<<"Du[0]:"<<compPt3dCov(pts3d[j], mK, 1).DU[0]<<endl;
                 }
                 // using ransac to extract a 3d line from 3d pts
                 tmpLine = extract3dline_mahdist(rndpts3d);
@@ -2128,10 +1910,6 @@ void Tracking::CreateNewKeyFrame()
                 //计算这个线的参数
         tmpLine = extract3dline(pts3d,origPoints,optiPoints);
 #endif
-                //cout<<"jieshu"<<endl;
-                //修复这条直线上的点
-
-
                 if(tmpLine.pts.size()/len > 0.4/*sysPara.ratio_of_collinear_pts*/	&&
                    cv::norm(tmpLine.A - tmpLine.B) >0.02) { // sysPara.line3d_length_thresh
                     //this line is reliable
@@ -2139,58 +1917,12 @@ void Tracking::CreateNewKeyFrame()
                     cout<<"gaibian line 3d"<<endl;
                     mCurrentFrame.mvLines3D[i]<<tmpLine.A.x,tmpLine.A.y,tmpLine.A.z,tmpLine.B.x,tmpLine.B.y,tmpLine.B.z;
                 }
-
-                /*if(1==mCurrentFrame.mvDepthLine[i])
-                {
-                    // rebuild this line in depth map
-
-                    for(int j=0; j<=numSmp; ++j)
-                    {
-                        cv::Point2d pt = mCurrentFrame.mvKeylinesUn[i].getStartPoint() * (1-j/numSmp) + mCurrentFrame.mvKeylinesUn[i].getEndPoint() * (j/numSmp);
-                        if(pt.x<0 || pt.y<0 || pt.x >= this->mImGray.cols || pt.y >= this->mImGray.rows ) continue;
-
-                        int row, col; // nearest pixel for pt
-                        if((floor(pt.x) == pt.x) && (floor(pt.y) == pt.y)) {// boundary issue
-                            col = max(int(pt.x-1),0);
-                            row = max(int(pt.y-1),0);
-                        }
-                        else {
-                            col = int(pt.x);
-                            row = int(pt.y);
-                        }
-
-
-                        float d=this->mImGray.ptr<float>(row)[col];
-                        cv::Point3d p;
-                        if(d<=0.01) continue;
-                        else
-                        {
-                            p.z=d;
-                            if (p.z < 0.01 || p.z>10){cout<<"Frame: invalid p.z"<<endl;continue;}
-
-                            p.x = (col - mCurrentFrame.cx) * p.z *mCurrentFrame.invfx;
-                            p.y = (row - mCurrentFrame.cy) * p.z *mCurrentFrame.invfy;
-                            p.z=mCurrentFrame.fy*mCurrentFrame.fx*(tmpLine.director.y*tmpLine.mid.x-
-                                       tmpLine.director.x*tmpLine.mid.y)/
-                                (mCurrentFrame.fy*tmpLine.director.y*(col-mCurrentFrame.cx)-
-                                        mCurrentFrame.fx*tmpLine.director.x*(row-mCurrentFrame.cy));
-                            //cout<<p.x<<", "<<p.y<<", "<<p.z<<endl;
-                            mCurrentFrame.mv3DLineforMap.push_back(p);
-                        }
-                        //tmpLine.pts.push_back(p);
-
-
-                    }
-                }*/
             }
 
             mCurrentFrame.NL=mCurrentFrame.mvKeylinesUn.size();
             mCurrentFrame.mvpMapLines=vector<MapLine *>(mCurrentFrame.NL,static_cast<MapLine*>(NULL));
             mCurrentFrame.mvbLineOutlier=vector<bool>(mCurrentFrame.NL,false);
-            cout<<"Tracking, extract lines from non-blur KF,NL"<<mCurrentFrame.NL<<endl;
-
         }
-
     }
 
     KeyFrame* pKF = new KeyFrame(mCurrentFrame,mpMap,mpKeyFrameDB);
@@ -2201,9 +1933,7 @@ void Tracking::CreateNewKeyFrame()
     if(mSensor!=System::MONOCULAR)
     {
         cout<<"Tracking: newKeyframe: RGBD"<<endl;
-
         mCurrentFrame.UpdatePoseMatrices();
-
         // We sort points by the measured depth by the stereo/RGBD sensor.
         // We create all those MapPoints whose depth < mThDepth.
         // If there are less than 100 close points we create the 100 closest.
@@ -2224,19 +1954,15 @@ void Tracking::CreateNewKeyFrame()
             float isDepthGood= mCurrentFrame.mvDepthLine[i];
             //cout<<"Tracking: StereoInitialization:线是否存在:"<<isDepthGood<<endl;
             //如果存在， 执行程序
-            cout<<"tracking,isDepthGood"<<isDepthGood<<endl;
             if(isDepthGood==1)
             {
                 vLineDepthIdx.push_back(make_pair(isDepthGood,i));
             }
         }
-        cout<<"Tracking finish adding vDepthID and vLineDepthId"<<endl;
-
 
         if(!vLineDepthIdx.empty())
         {
             //sort(vLineDepthIdx.begin(),vLineDepthIdx.end());
-
             int nLines = 0;
             for(size_t j=0; j<vLineDepthIdx.size();j++)
             {
@@ -2317,14 +2043,8 @@ void Tracking::CreateNewKeyFrame()
             }
         }
     }
-
     mpLocalMapper->InsertKeyFrame(pKF);
-
     mpLocalMapper->SetNotStop(false);
-   
-    // TO DO
-    //mpPointCloudMapping->insertKeyFrame( pKF, this->mImRGB, this->mImDepth );
-
     mnLastKeyFrameId = mCurrentFrame.mnId;
     mpLastKeyFrame = pKF;
 }
@@ -2424,7 +2144,6 @@ void Tracking::SearchLocalLines()
                 nToMatch++;
             }
         }
-
         if(nToMatch>0)
         {
             LSDmatcher matcher;
@@ -2446,15 +2165,12 @@ void Tracking::UpdateLocalMap()
 
     // Update
     UpdateLocalKeyFrames();
-    cout<<"the size of local keyframe"<<mvpLocalKeyFrames.size()<<endl;
-
     UpdateLocalPoints();
     UpdateLocalLines();
 }
 
 void Tracking::UpdateLocalLines()
 {
-        cout<<"Tracking: UpdateLocalLines()"<<endl;
         // step1：清空局部MapLines
         mvpLocalMapLines.clear();
 
@@ -2463,7 +2179,6 @@ void Tracking::UpdateLocalLines()
         {
             KeyFrame* pKF = *itKF;
             const vector<MapLine*> vpMLs = pKF->GetMapLineMatches();
-
             //step3：将局部关键帧的MapLines添加到mvpLocalMapLines
             for(vector<MapLine*>::const_iterator itML=vpMLs.begin(), itEndML=vpMLs.end(); itML!=itEndML; itML++)
             {
@@ -2479,7 +2194,6 @@ void Tracking::UpdateLocalLines()
                 }
             }
         }
-        cout<<"Tracking: Finish updateLocallines"<<endl;
     }
 
 void Tracking::UpdateLocalPoints()
@@ -2620,15 +2334,12 @@ void Tracking::UpdateLocalKeyFrames()
 
 bool Tracking::Relocalization()
 {
-    cout<<"Tracking:localization"<<endl;
     // Compute Bag of Words Vector
     mCurrentFrame.ComputeBoW();
 
     // Relocalization is performed when tracking is lost
     // Track Lost: Query KeyFrame Database for keyframe candidates for relocalisation
     vector<KeyFrame*> vpCandidateKFs = mpKeyFrameDB->DetectRelocalizationCandidates(&mCurrentFrame);
-
-    cout<<"Tracking,vpCandidateKFs"<<vpCandidateKFs.size()<<endl;
     if(vpCandidateKFs.empty())
         return false;
 
@@ -2783,176 +2494,6 @@ bool Tracking::Relocalization()
 
 }
 
-bool Tracking::LocalizationforPL()
-{
-        cout<<"Tracking:localization"<<endl;
-        // Compute Bag of Words Vector
-        mCurrentFrame.ComputeBoW();
-
-        // Relocalization is performed when tracking is lost
-        // Track Lost: Query KeyFrame Database for keyframe candidates for relocalisation
-        vector<KeyFrame*> vpCandidateKFs = mpKeyFrameDB->DetectRelocalizationCandidates(&mCurrentFrame);
-
-        cout<<"Tracking,vpCandidateKFs"<<vpCandidateKFs.size()<<endl;
-        if(vpCandidateKFs.empty())
-            return false;
-
-        const int nKFs = vpCandidateKFs.size();
-
-        // We perform first an ORB matching with each candidate
-        // If enough matches are found we setup a PnP solver
-        ORBmatcher matcher(0.75,true);
-        LSDmatcher lmatcher;
-
-        vector<PnPsolver*> vpPnPsolvers;
-        vpPnPsolvers.resize(nKFs);
-
-        vector<vector<MapPoint*> > vvpMapPointMatches;
-        vector<vector<MapLine*>>   vvpMapLineMatches;
-        vvpMapPointMatches.resize(nKFs);
-        vvpMapLineMatches.resize(nKFs);
-
-        vector<bool> vbDiscarded;
-        vbDiscarded.resize(nKFs);
-
-        int nCandidates=0;
-
-        for(int i=0; i<nKFs; i++)
-        {
-            KeyFrame* pKF = vpCandidateKFs[i];
-            if(pKF->isBad())
-                vbDiscarded[i] = true;
-            else
-            {
-                int nmatches = matcher.SearchByBoW(pKF,mCurrentFrame,vvpMapPointMatches[i]);
-                int lmatches = lmatcher.SearchByProjection(pKF,mCurrentFrame,vvpMapLineMatches[i]);
-                if(nmatches<15 && lmatches<6)
-                {
-                    vbDiscarded[i] = true;
-                    continue;
-                }
-                else
-                {
-                    PnPsolver* pSolver = new PnPsolver(mCurrentFrame,vvpMapPointMatches[i]);
-                    pSolver->SetRansacParameters(0.99,10,300,4,0.5,5.991);
-                    vpPnPsolvers[i] = pSolver;
-                    nCandidates++;
-                }
-            }
-        }
-
-
-        // Alternatively perform some iterations of P4P RANSAC
-        // Until we found a camera pose supported by enough inliers
-        bool bMatch = false;
-        ORBmatcher matcher2(0.9,true);
-        //LSDmatcher lmatcher;
-        while(nCandidates>0 && !bMatch)
-        {
-            for(int i=0; i<nKFs; i++)
-            {
-                if(vbDiscarded[i])
-                    continue;
-
-                // Perform 5 Ransac Iterations
-                vector<bool> vbInliers;
-                int nInliers;
-                bool bNoMore;
-
-                PnPsolver* pSolver = vpPnPsolvers[i];
-                cv::Mat Tcw = pSolver->iterate(5,bNoMore,vbInliers,nInliers);
-
-                // If Ransac reachs max. iterations discard keyframe
-                if(bNoMore)
-                {
-                    vbDiscarded[i]=true;
-                    nCandidates--;
-                }
-
-                // If a Camera Pose is computed, optimize
-                if(!Tcw.empty())
-                {
-                    Tcw.copyTo(mCurrentFrame.mTcw);
-
-                    set<MapPoint*> sFound;
-
-                    const int np = vbInliers.size();
-
-                    for(int j=0; j<np; j++)
-                    {
-                        if(vbInliers[j])
-                        {
-                            mCurrentFrame.mvpMapPoints[j]=vvpMapPointMatches[i][j];
-                            sFound.insert(vvpMapPointMatches[i][j]);
-                        }
-                        else
-                            mCurrentFrame.mvpMapPoints[j]=NULL;
-                    }
-
-                    int nGood = Optimizer::PoseOptimization(&mCurrentFrame);
-
-                    if(nGood<10)
-                        continue;
-
-                    for(int io =0; io<mCurrentFrame.N; io++)
-                        if(mCurrentFrame.mvbOutlier[io])
-                            mCurrentFrame.mvpMapPoints[io]=static_cast<MapPoint*>(NULL);
-
-                    // If few inliers, search by projection in a coarse window and optimize again
-                    if(nGood<50)
-                    {
-                        int nadditional =matcher2.SearchByProjection(mCurrentFrame,vpCandidateKFs[i],sFound,10,100);
-
-                        if(nadditional+nGood>=50)
-                        {
-                            nGood = Optimizer::PoseOptimization(&mCurrentFrame);
-
-                            // If many inliers but still not enough, search by projection again in a narrower window
-                            // the camera has been already optimized with many points
-                            if(nGood>30 && nGood<50)
-                            {
-                                sFound.clear();
-                                for(int ip =0; ip<mCurrentFrame.N; ip++)
-                                    if(mCurrentFrame.mvpMapPoints[ip])
-                                        sFound.insert(mCurrentFrame.mvpMapPoints[ip]);
-                                nadditional =matcher2.SearchByProjection(mCurrentFrame,vpCandidateKFs[i],sFound,3,64);
-
-                                // Final optimization
-                                if(nGood+nadditional>=50)
-                                {
-                                    nGood = Optimizer::PoseOptimization(&mCurrentFrame);
-
-                                    for(int io =0; io<mCurrentFrame.N; io++)
-                                        if(mCurrentFrame.mvbOutlier[io])
-                                            mCurrentFrame.mvpMapPoints[io]=NULL;
-                                }
-                            }
-                        }
-                    }
-
-
-                    // If the pose is supported by enough inliers stop ransacs and continue
-                    if(nGood>=50)
-                    {
-                        bMatch = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if(!bMatch)
-        {
-            return false;
-        }
-        else
-        {
-            mnLastRelocFrameId = mCurrentFrame.mnId;
-            return true;
-        }
-
-    }
-
 void Tracking::Reset()
 {
     mpViewer->RequestStop();
@@ -2997,44 +2538,9 @@ void Tracking::Reset()
     mpViewer->Release();
 }
 
-void Tracking::ChangeCalibration(const string &strSettingPath)
-{
-    cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
-    float fx = fSettings["Camera.fx"];
-    float fy = fSettings["Camera.fy"];
-    float cx = fSettings["Camera.cx"];
-    float cy = fSettings["Camera.cy"];
-
-    cv::Mat K = cv::Mat::eye(3,3,CV_32F);
-    K.at<float>(0,0) = fx;
-    K.at<float>(1,1) = fy;
-    K.at<float>(0,2) = cx;
-    K.at<float>(1,2) = cy;
-    K.copyTo(mK);
-
-    cv::Mat DistCoef(4,1,CV_32F);
-    DistCoef.at<float>(0) = fSettings["Camera.k1"];
-    DistCoef.at<float>(1) = fSettings["Camera.k2"];
-    DistCoef.at<float>(2) = fSettings["Camera.p1"];
-    DistCoef.at<float>(3) = fSettings["Camera.p2"];
-    const float k3 = fSettings["Camera.k3"];
-    if(k3!=0)
-    {
-        DistCoef.resize(5);
-        DistCoef.at<float>(4) = k3;
-    }
-    DistCoef.copyTo(mDistCoef);
-
-    mbf = fSettings["Camera.bf"];
-
-    Frame::mbInitialComputations = true;
-}
-
 void Tracking::InformOnlyTracking(const bool &flag)
 {
     mbOnlyTracking = flag;
 }
 
-
-
-} //namespace ORB_SLAM
+} //namespace StructureSLAM

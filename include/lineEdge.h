@@ -1,6 +1,8 @@
-//
-// Created by lan on 18-1-12.
-//
+/**
+* This file is part of Structure-SLAM.
+*
+*
+*/
 
 #ifndef ORB_SLAM2_LINEEDGE_H
 #define ORB_SLAM2_LINEEDGE_H

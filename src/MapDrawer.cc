@@ -1,8 +1,13 @@
 /**
+* This file is part of Structure-SLAM.
+*
+*
+*/
+/**
 * This file is part of ORB-SLAM2.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/StructureSLAM>
+* For more information see <https://github.com/raulmur/ORB_SLAM2>
 *
 * ORB-SLAM2 is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -111,7 +116,7 @@ namespace StructureSLAM
 
         glLineWidth(mLineWidth);
         glBegin ( GL_LINES );
-        glColor3f(0.0,0.0,0.0); //红色
+        glColor3f(1.0,0.0,0.0); //红色
 //    cout << "spRefMLs.size() = " << spRefMLs.size() << endl;
 
         for(set<MapLine*>::iterator sit=spRefMLs.begin(), send=spRefMLs.end(); sit!=send; sit++)

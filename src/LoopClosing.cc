@@ -1,8 +1,13 @@
 /**
+* This file is part of Structure-SLAM.
+*
+*
+*/
+/**
 * This file is part of ORB-SLAM2.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/StructureSLAM>
+* For more information see <https://github.com/raulmur/ORB_SLAM2>
 *
 * ORB-SLAM2 is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -268,7 +273,7 @@ bool LoopClosing::ComputeSim3()
 
         int nmatches = matcher.SearchByBoW(mpCurrentKF,pKF,vvpMapPointMatches[i]);
 
-        int nlmatches=lmatcher.SearchByProjection(mpCurrentKF,pKF,vvpMaoLineMatches[i]);
+        int nlmatches=0;
         if(nmatches<20&&nlmatches<6)
         {
             vbDiscarded[i] = true;

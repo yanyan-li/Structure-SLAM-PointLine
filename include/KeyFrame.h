@@ -2,7 +2,7 @@
 * This file is part of ORB-SLAM2.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/StructureSLAM>
+* For more information see <https://github.com/raulmur/ORB_SLAM2>
 *
 * ORB-SLAM2 is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -99,6 +99,8 @@ public:
 
     // KeyPoint functions
     std::vector<size_t> GetFeaturesInArea(const float &x, const float  &y, const float  &r) const;
+    std::vector<size_t> GetLinesInArea(const float &x1, const float &y1, const float &x2, const float &y2,
+                                       const float &r, const int minLevel=-1, const int maxLevel=-1) const;
     cv::Mat UnprojectStereo(int i);
 
     // Image

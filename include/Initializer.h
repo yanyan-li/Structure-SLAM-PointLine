@@ -1,8 +1,14 @@
 /**
+* This file is part of Structure-SLAM.
+*
+*
+*/
+/**
 * This file is part of ORB-SLAM2.
+* This file is a modified version of EPnP <http://cvlab.epfl.ch/EPnP/index.php>, see FreeBSD license below.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/StructureSLAM>
+* For more information see <https://github.com/raulmur/ORB_SLAM2>
 *
 * ORB-SLAM2 is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -21,12 +27,8 @@
 #define INITIALIZER_H
 
 #include<opencv2/opencv.hpp>
-//#include <line_descriptor/descriptor_custom.hpp>
-//#include <line_descriptor_custom.hpp>
-
 #include "Frame.h"
 #include "auxiliar.h"
-
 
 namespace StructureSLAM
 {

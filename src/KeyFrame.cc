@@ -1,8 +1,13 @@
 /**
+* This file is part of Structure-SLAM.
+*
+*
+*/
+/**
 * This file is part of ORB-SLAM2.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/StructureSLAM>
+* For more information see <https://github.com/raulmur/ORB_SLAM2>
 *
 * ORB-SLAM2 is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -23,14 +28,18 @@
 #include "ORBmatcher.h"
 #include<mutex>
 
+using namespace std;
+using namespace cv;
+using namespace cv::line_descriptor;
+using namespace Eigen;
+
 namespace StructureSLAM
 {
 
     long unsigned int KeyFrame::nNextId=0;
-    long unsigned int KeyFrame::nNextCornerId=0;
 
     KeyFrame::KeyFrame(Frame &F, Map *pMap, KeyFrameDatabase *pKFDB):
-            mnFrameId(F.mnId),  mTimeStamp(F.mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
+            mnFrameId(F.mnId), mTimeStamp(F.mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
             mfGridElementWidthInv(F.mfGridElementWidthInv), mfGridElementHeightInv(F.mfGridElementHeightInv),
             mnTrackReferenceForFrame(0), mnFuseTargetForKF(0), mnBALocalForKF(0), mnBAFixedForKF(0),
             mnLoopQuery(0), mnLoopWords(0), mnRelocQuery(0), mnRelocWords(0), mnBAGlobalForKF(0),
@@ -44,40 +53,9 @@ namespace StructureSLAM
             mpORBvocabulary(F.mpORBvocabulary), mbFirstConnection(true), mpParent(NULL), mbNotErase(false),
             mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb/2), mpMap(pMap),
             NL(F.NL), mvKeyLines(F.mvKeylinesUn), mvKeyLineFunctions(F.mvKeyLineFunctions), mLineDescriptors(F.mLdesc),
-            mvpMapLines(F.mvpMapLines),mv3DLineforMap(F.mv3DLineforMap),mvLines3D(F.mvLines3D)
+            mvpMapLines(F.mvpMapLines), mv3DLineforMap(F.mv3DLineforMap), mvLines3D(F.mvLines3D)
     {
         mnId=nNextId++;
-
-        mGrid.resize(mnGridCols);
-        for(int i=0; i<mnGridCols;i++)
-        {
-            mGrid[i].resize(mnGridRows);
-            for(int j=0; j<mnGridRows; j++)
-                mGrid[i][j] = F.mGrid[i][j];
-        }
-
-        SetPose(F.mTcw);
-    }
-
-
-    KeyFrame::KeyFrame(Frame &F, Map* pMap, KeyFrameDatabase* pKFDB,bool isCornerFrame):
-            mnFrameId(F.mnId),  mTimeStamp(F.mTimeStamp), mnGridCols(FRAME_GRID_COLS), mnGridRows(FRAME_GRID_ROWS),
-            mfGridElementWidthInv(F.mfGridElementWidthInv), mfGridElementHeightInv(F.mfGridElementHeightInv),
-            mnTrackReferenceForFrame(0), mnFuseTargetForKF(0), mnBALocalForKF(0), mnBAFixedForKF(0),
-            mnLoopQuery(0), mnLoopWords(0), mnRelocQuery(0), mnRelocWords(0), mnBAGlobalForKF(0),
-            fx(F.fx), fy(F.fy), cx(F.cx), cy(F.cy), invfx(F.invfx), invfy(F.invfy),
-            mbf(F.mbf), mb(F.mb), mThDepth(F.mThDepth), N(F.N), mvKeys(F.mvKeys), mvKeysUn(F.mvKeysUn),
-            mvuRight(F.mvuRight), mvDepth(F.mvDepth), mDescriptors(F.mDescriptors.clone()),
-            mBowVec(F.mBowVec), mFeatVec(F.mFeatVec), mnScaleLevels(F.mnScaleLevels), mfScaleFactor(F.mfScaleFactor),
-            mfLogScaleFactor(F.mfLogScaleFactor), mvScaleFactors(F.mvScaleFactors), mvLevelSigma2(F.mvLevelSigma2),
-            mvInvLevelSigma2(F.mvInvLevelSigma2), mnMinX(F.mnMinX), mnMinY(F.mnMinY), mnMaxX(F.mnMaxX),
-            mnMaxY(F.mnMaxY), mK(F.mK), mvpMapPoints(F.mvpMapPoints), mpKeyFrameDB(pKFDB),
-            mpORBvocabulary(F.mpORBvocabulary), mbFirstConnection(true), mpParent(NULL), mbNotErase(false),
-            mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb/2), mpMap(pMap),
-            NL(F.NL), mvKeyLines(F.mvKeylinesUn), mvKeyLineFunctions(F.mvKeyLineFunctions), mLineDescriptors(F.mLdesc),
-            mvpMapLines(F.mvpMapLines),mv3DLineforMap(F.mv3DLineforMap),mvLines3D(F.mvLines3D)
-    {
-        mnCornerId=nNextCornerId++;
 
         mGrid.resize(mnGridCols);
         for(int i=0; i<mnGridCols;i++)
@@ -325,10 +303,12 @@ namespace StructureSLAM
         map<KeyFrame*,int> KFcounter;
 
         vector<MapPoint*> vpMP;
+        vector<MapLine*> vpML;
 
         {
             unique_lock<mutex> lockMPs(mMutexFeatures);
             vpMP = mvpMapPoints;
+            vpML = mvpMapLines;
         }
 
         //For all map points in keyframe check in which other keyframes are they seen
@@ -352,6 +332,28 @@ namespace StructureSLAM
                 KFcounter[mit->first]++;
             }
         }
+
+        for(vector<MapLine*>::iterator vit=vpML.begin(), vend=vpML.end(); vit!=vend; vit++)
+        {
+            MapLine* pML = *vit;
+
+            if(!pML)
+                continue;
+
+            if(pML->isBad())
+                continue;
+
+            map<KeyFrame*,size_t> observations = pML->GetObservations();
+
+            for(map<KeyFrame*,size_t>::iterator mit=observations.begin(), mend=observations.end(); mit!=mend; mit++)
+            {
+                if(mit->first->mnId==mnId)
+                    continue;
+                KFcounter[mit->first]++;
+            }
+        }
+
+
 
         // This should not happen
         if(KFcounter.empty())
@@ -497,12 +499,17 @@ namespace StructureSLAM
             }
         }
 
-        for(map<KeyFrame*,int>::iterator mit = mConnectedKeyFrameWeights.begin(), mend=mConnectedKeyFrameWeights.end(); mit!=mend; mit++)
-            mit->first->EraseConnection(this);
+        for(auto & mConnectedKeyFrameWeight : mConnectedKeyFrameWeights)
+            mConnectedKeyFrameWeight.first->EraseConnection(this);
 
-        for(size_t i=0; i<mvpMapPoints.size(); i++)
-            if(mvpMapPoints[i])
-                mvpMapPoints[i]->EraseObservation(this);
+        for(auto & mvpMapPoint : mvpMapPoints)
+            if(mvpMapPoint)
+                mvpMapPoint->EraseObservation(this);
+
+        for(auto & mvpMapLine : mvpMapLines)
+            if(mvpMapLine)
+                mvpMapLine->EraseObservation(this);
+
         {
             unique_lock<mutex> lock(mMutexConnections);
             unique_lock<mutex> lock1(mMutexFeatures);
@@ -641,6 +648,41 @@ namespace StructureSLAM
         return vIndices;
     }
 
+    vector<size_t>
+    KeyFrame::GetLinesInArea(const float &x1, const float &y1, const float &x2, const float &y2, const float &r,
+                             const int minLevel, const int maxLevel) const {
+        vector<size_t> vIndices;
+
+        vector<KeyLine> vkl = this->mvKeyLines;
+
+        const bool bCheckLevels = (minLevel > 0) || (maxLevel > 0);
+
+        for (size_t i = 0; i < vkl.size(); i++) {
+            KeyLine keyline = vkl[i];
+
+            // 1.对比中点距离
+            float distance = (0.5 * (x1 + x2) - keyline.pt.x) * (0.5 * (x1 + x2) - keyline.pt.x) +
+                             (0.5 * (y1 + y2) - keyline.pt.y) * (0.5 * (y1 + y2) - keyline.pt.y);
+            if (distance > r * r)
+                continue;
+
+            float slope = (y1 - y2) / (x1 - x2) - keyline.angle;
+            if (slope > r * 0.01)
+                continue;
+
+            if (bCheckLevels) {
+                if (keyline.octave < minLevel)
+                    continue;
+                if (maxLevel >= 0 && keyline.octave > maxLevel)
+                    continue;
+            }
+
+            vIndices.push_back(i);
+        }
+
+        return vIndices;
+    }
+
     bool KeyFrame::IsInImage(const float &x, const float &y) const
     {
         return (x>=mnMinX && x<mnMaxX && y>=mnMinY && y<mnMaxY);
@@ -664,11 +706,8 @@ namespace StructureSLAM
             return cv::Mat();
     }
 
-/**
- * @brief 估计当前关键帧场景深度，q=2表示中值
- * @param q q=2
- * @return Median Depth
- */
+
+
     float KeyFrame::ComputeSceneMedianDepth(const int q)
     {
         vector<MapPoint*> vpMapPoints;
@@ -701,7 +740,6 @@ namespace StructureSLAM
         return vDepths[(vDepths.size()-1)/q];
     }
 
-    //针对自己添加的MapLine相关的函数
     void KeyFrame::AddMapLine(MapLine *pML, const size_t &idx)
     {
         unique_lock<mutex> lock(mMutexFeatures);
@@ -779,7 +817,7 @@ namespace StructureSLAM
         return mvpMapLines[idx];
     }
 
-    void KeyFrame::lineDescriptorMAD(vector<vector<DMatch>> line_matches, double &nn_mad, double &nn12_mad) const
+    void KeyFrame::lineDescriptorMAD(std::vector<std::vector<cv::DMatch>> line_matches, double &nn_mad, double &nn12_mad) const
     {
         vector<vector<DMatch>> matches_nn, matches_12;
         matches_nn = line_matches;
@@ -805,5 +843,6 @@ namespace StructureSLAM
         sort(matches_12.begin(), matches_12.end(), compare_descriptor_by_NN_dist());
         nn12_mad = 1.4826 * matches_12[int(matches_12.size()/2)][0].distance;
     }
+
 
 } //namespace ORB_SLAM

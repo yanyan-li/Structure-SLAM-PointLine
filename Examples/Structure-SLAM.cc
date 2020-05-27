@@ -8,11 +8,8 @@ Yanyan Li
 #include<algorithm>
 #include<fstream>
 #include<chrono>
-
 #include<opencv2/core/core.hpp>
-
 #include<System.h>
-
 using namespace std;
 
 
@@ -24,7 +21,7 @@ int main(int argc, char **argv)
 {
     if(argc != 4)
     {
-        cerr << endl << "Usage: ./mono_tum path_to_vocabulary path_to_settings path_to_sequence" << endl;
+        cerr << endl << "Usage: ./Structure-SLAM path_to_vocabulary path_to_settings path_to_sequence" << endl;
         return 1;
     }
 
@@ -50,7 +47,6 @@ int main(int argc, char **argv)
     cout << endl << "-------" << endl;
     cout << "Start processing sequence ..." << endl;
     cout << "Images in the sequence: " << nImages << endl << endl;
-
 
     // Main loop
     cv::Mat im;
