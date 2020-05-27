@@ -49,7 +49,7 @@ chmod +x build.sh
 ```
 RGB File
 Normal File
-associations.txt
+mono-normal.txt
 ```
 *You can train your own network for normal prediction or download the our normal prediction results for testing, which can be found [here](https://drive.google.com/open?id=12rgrg92CFt7DcdTO4a7tthqbVKsmcfGn) or in Examples/dataset.*
 
