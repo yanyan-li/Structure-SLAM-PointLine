@@ -1,13 +1,11 @@
 # Structure-SLAM
-Structure-SLAM is a real-time monocular SLAM library that computes the camera trajectory and a sparse 3D reconstruction based on the assumption of Manhattan World. We provide examples to run the system in the [TUM RGB-D dataset](http://vision.in.tum.de/data/datasets/rgbd-dataset) and [ICL NUIM dataset](https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html). 
+Structure-SLAM is a real-time monocular SLAM method that computes the camera trajectory and a sparse 3D reconstruction based on the assumption of Manhattan World. We provide examples to run the system on the [ICL NUIM dataset](https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html). 
 
 ​            ![structure-slam](images/structure-slam.png)
 
 # 1. License
 
-Structure-SLAM is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). 
-
-For a closed-source version of Structure-SLAM for commercial purposes, please contact the us.
+Structure-SLAM is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). For a closed-source version of Structure-SLAM for commercial purposes, please contact the us.
 
 # 2. Prerequisites
 We have tested the library in **Ubuntu** **16.04**, but it should be easy to compile in other platforms. A powerful computer (e.g. i7) will ensure real-time performance and provide more stable and accurate results.
@@ -45,7 +43,7 @@ chmod +x build.sh
 
 ## Run on ICL NUIM dataset
 
-1. Prepare a dataset to PATH_TO_SEQUENCE_FOLDER, which contains  RGB images, normal maps.
+1. Prepare a dataset and uncompress it to PATH_TO_SEQUENCE_FOLDER, which contains RGB images and normal maps.
 ```
 RGB File
 Normal File
@@ -59,7 +57,7 @@ mono-normal.txt
 ./Examples/Structure-SLAM Vocabulary/ORBvoc.txt Examples/ICL.yaml PATH_TO_SEQUENCE_FOLDER
 ```
 
-# Acknowledgements
+# 4. Acknowledgements
 
 We thank [Raul Mur-Artal](https://github.com/raulmurfor) for his impressive work, [**ORB-SLAM2**](https://github.com/raulmur/ORB_SLAM), which is a completed feature-based SLAM system.   
 
