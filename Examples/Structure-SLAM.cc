@@ -13,7 +13,7 @@ Yanyan Li
 using namespace std;
 
 
-void LoadImages(const string &strFile, const string& gtFile, vector<string> &vstrImageFilenames,
+void LoadImages(const string &strFile, vector<string> &vstrImageFilenames,
                 vector<string> &vstrNormalFilenames, vector<double> &vTimestamps,vector<cv::Mat> &gtPose);
 
 
@@ -31,8 +31,7 @@ int main(int argc, char **argv)
     vector<double> vTimestamps;
     vector<cv::Mat> vGtPose;
     string strFile = string(argv[3])+"/mono-normal.txt";
-    string gtFile = string(argv[3])+"/groundtruth.txt";
-    LoadImages(strFile,gtFile, vstrImageFilenames,vstrNormalFilenames, vTimestamps,vGtPose);
+    LoadImages(strFile, vstrImageFilenames,vstrNormalFilenames, vTimestamps,vGtPose);
 
 
     int nImages = vstrImageFilenames.size();
@@ -151,11 +150,10 @@ cv::Mat setRotate(double qx, double qy,double qz, double qw,double tx, double ty
     return pose;
 }
 
-void LoadImages(const string &strFile, const string& gtFile, vector<string> &vstrImageFilenames, vector<string> &vstrNormalFilenames, vector<double> &vTimestamps,vector<cv::Mat> &gtPose)
+void LoadImages(const string &strFile, vector<string> &vstrImageFilenames, vector<string> &vstrNormalFilenames, vector<double> &vTimestamps,vector<cv::Mat> &gtPose)
 {
     ifstream f,gtF;
     f.open(strFile.c_str());
-    gtF.open(gtFile.c_str());
 
     // skip first three lines
     string s0;
@@ -180,30 +178,6 @@ void LoadImages(const string &strFile, const string& gtFile, vector<string> &vst
             vstrImageFilenames.push_back(sRGB);
             ss >> sNormal;
             vstrNormalFilenames.push_back(sNormal);
-        }
-    }
-
-    while(!gtF.eof())
-    {
-        string s;
-        getline(gtF,s);
-
-        if(!s.empty())
-        {
-            stringstream ss;
-            ss << s;
-            double t,qw,qx,qy,qz,tx,ty,tz;
-            ss >> t;
-            ss >> tx;
-            ss >>ty;
-            ss >> tz;
-            ss >>qx;
-            ss >> qy;
-            ss >>qz;
-            ss >> qw;
-            //convert qu  to Mat
-            cv::Mat temPose= setRotate(qx,qy,qz,qw,tx,ty,tz);
-            gtPose.push_back(temPose);
         }
     }
 }
