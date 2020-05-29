@@ -3,9 +3,9 @@ Structure-SLAM (PL) is a real-time monocular SLAM method that computes the camer
 
 ​       ![teas](images/teas.png)
 
-# 1. License
+# 1. License 
 
-Structure-SLAM is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). For a closed-source version of Structure-SLAM for commercial purposes, please contact the us.
+Structure-SLAM is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). For a closed-source version of Structure-SLAM for commercial purposes, please contact me yanyan.li@pku.edu.cn
 
 # 2. Prerequisites
 We have tested the library in **Ubuntu** **16.04**, but it should be easy to compile in other platforms. A powerful computer (e.g. i7) will ensure real-time performance and provide more stable and accurate results.
