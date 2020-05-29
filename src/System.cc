@@ -24,7 +24,6 @@
 */
 
 
-
 #include "System.h"
 #include "Converter.h"
 #include <thread>
@@ -128,52 +127,40 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 }
 
 
-cv::Mat System::TrackMonocularWitNormal(const cv::Mat &im,const cv::Mat &normal, const double &timestamp)
+cv::Mat System::TrackMonocularWithPL(const cv::Mat &im, const double &timestamp)
 {
-    // Check mode change
+
+    unique_lock<mutex> lock(mMutexMode);
+    if(mbActivateLocalizationMode)
     {
-        unique_lock<mutex> lock(mMutexMode);
-        if(mbActivateLocalizationMode)
-        {
-            mpLocalMapper->RequestStop();
+        mpLocalMapper->RequestStop();
 
-            // Wait until Local Mapping has effectively stopped
-            while(!mpLocalMapper->isStopped())
-            {
-                usleep(1000);
-            }
-
-            mpTracker->InformOnlyTracking(true);
-            mbActivateLocalizationMode = false;
-        }
-        if(mbDeactivateLocalizationMode)
+        // Wait until Local Mapping has effectively stopped
+        while(!mpLocalMapper->isStopped())
         {
-            mpTracker->InformOnlyTracking(false);
-            mpLocalMapper->Release();
-            mbDeactivateLocalizationMode = false;
+            usleep(1000);
         }
+
+        mpTracker->InformOnlyTracking(true);
+        mbActivateLocalizationMode = false;
+    }
+    if(mbDeactivateLocalizationMode)
+    {
+        mpTracker->InformOnlyTracking(false);
+        mpLocalMapper->Release();
+        mbDeactivateLocalizationMode = false;
     }
 
-    // Check reset
-    {
-        unique_lock<mutex> lock(mMutexReset);
-        if(mbReset)
-        {
-            //mpTracker->Reset();
-            //mbReset = false;
-        }
-    }
-
-    cv::Mat Tcw = mpTracker->GrabImageMonocularWithNormal(im,normal,timestamp);
-
+    cv::Mat Tcw = mpTracker->GrabImageMonocularWithPL(im,timestamp);
     unique_lock<mutex> lock2(mMutexState);
     mTrackingState = mpTracker->mState;
     mTrackedMapPoints = mpTracker->mCurrentFrame.mvpMapPoints;
     mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
-    mTrackedMapLines = mpTracker->mCurrentFrame.mvpMapLines;    //仿照KeyPoint，自己添加的
-    mTrackedKeyLines = mpTracker->mCurrentFrame.mvKeylinesUn;    //仿照KeyPoint，自己添加的
+    mTrackedMapLines = mpTracker->mCurrentFrame.mvpMapLines;
+    mTrackedKeyLines = mpTracker->mCurrentFrame.mvKeylinesUn;
     return Tcw;
 }
+
 
 void System::ActivateLocalizationMode()
 {
@@ -285,7 +272,6 @@ void System::SaveTrajectoryTUM(const string &filename)
     f.close();
     cout << endl << "trajectory saved!" << endl;
 }
-
 
 void System::SaveKeyFrameTrajectoryTUM(const string &filename)
 {

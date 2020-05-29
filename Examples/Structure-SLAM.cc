@@ -1,12 +1,12 @@
 /**
-Structure-SLAM
-Feed the pipeline with RGB and predicted normal frames.
-Yanyan Li
+ * This file is part of Structure-SLAM.
+ * Yanyan Li <yanyan.li@tum.de> (Technical University of Munich)
+ *
+ *
 */
 
 #include<iostream>
 #include<algorithm>
-#include<fstream>
 #include<chrono>
 #include<opencv2/core/core.hpp>
 #include<System.h>
@@ -14,8 +14,7 @@ using namespace std;
 
 
 void LoadImages(const string &strFile, vector<string> &vstrImageFilenames,
-                vector<string> &vstrNormalFilenames, vector<double> &vTimestamps,vector<cv::Mat> &gtPose);
-
+                vector<string> &vstrNormalFilenames, vector<double> &vTimestamps);
 
 int main(int argc, char **argv)
 {
@@ -29,9 +28,8 @@ int main(int argc, char **argv)
     vector<string> vstrImageFilenames;
     vector<string> vstrNormalFilenames;
     vector<double> vTimestamps;
-    vector<cv::Mat> vGtPose;
     string strFile = string(argv[3])+"/mono-normal.txt";
-    LoadImages(strFile, vstrImageFilenames,vstrNormalFilenames, vTimestamps,vGtPose);
+    LoadImages(strFile, vstrImageFilenames,vstrNormalFilenames, vTimestamps);
 
 
     int nImages = vstrImageFilenames.size();
@@ -69,10 +67,9 @@ int main(int argc, char **argv)
         std::chrono::monotonic_clock::time_point t1 = std::chrono::monotonic_clock::now();
 #endif
 
-        // Pass the image to the SLAM system
+        // feed the images to the system
         cout<<"****This is the "<<ni<<"th image"<<", the name is "<<vTimestamps[ni]<<endl;
-        SLAM.TrackMonocularWitNormal(im,normal,tframe);//, vGtPose[ni]);
-        //cout<<vstrImageFilenames[ni]<< "normals_lrk2_exr/"+std::to_string(tframe)+".exr"<<endl;
+        SLAM.TrackMonocularWithPL(im,tframe);
 
 #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
@@ -83,7 +80,6 @@ int main(int argc, char **argv)
         double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
 
         vTimesTrack[ni]=ttrack;
-
         // Wait to load the next frame
         double T=0;
         if(ni<nImages-1)
@@ -92,12 +88,8 @@ int main(int argc, char **argv)
             T = tframe-vTimestamps[ni-1];
 
         if(ttrack<T)
-            usleep((T-ttrack)*1e5);
+            usleep((T-ttrack)*1e4);
     }
-
-//    while (true) {
-//        sleep(1000);
-//    }
 
     // Stop all threads
     SLAM.Shutdown();
@@ -109,58 +101,22 @@ int main(int argc, char **argv)
     {
         totaltime+=vTimesTrack[ni];
     }
-    cout << "-------" << endl << endl;
-    cout << "median tracking time: " << vTimesTrack[nImages/2] << endl;
-    cout << "mean tracking time: " << totaltime/nImages << endl;
 
     // Save camera trajectory
     SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt");
     SLAM.SaveTrajectoryTUM("MonoTrajectory.txt");
     return 0;
 }
-cv::Mat setRotate(double qx, double qy,double qz, double qw,double tx, double ty,double tz) {
-    double sqw = qw*qw;
-    double sqx = qx*qx;
-    double sqy = qy*qy;
-    double sqz = qz*qz;
 
-    cv::Mat Pose =cv::Mat::zeros(4,4,CV_32F);
-
-    float m00 = sqx - sqy - sqz + sqw; // since sqw + sqx + sqy + sqz =1
-    float m11 = -sqx + sqy - sqz + sqw;
-    float m22 = -sqx - sqy + sqz + sqw;
-
-    double tmp1 = qx*qy;
-    double tmp2 = qz*qw;
-    float m01 = 2.0 * (tmp1 + tmp2);
-    float m10 = 2.0 * (tmp1 - tmp2);
-
-    tmp1 = qx*qz;
-    tmp2 = qy*qw;
-    float m02 = 2.0 * (tmp1 - tmp2);
-    float m20 = 2.0 * (tmp1 + tmp2);
-
-    tmp1 = qy*qz;
-    tmp2 = qx*qw;
-    float m12 = 2.0 * (tmp1 + tmp2);
-    float m21 = 2.0 * (tmp1 - tmp2);
-
-    cv::Mat pose = (cv::Mat_<float>(4,4) << m00,m01,m02,tx,m10,m11,m12,ty,m20,m21,m22,tz,0,0,0,1);
-
-    return pose;
-}
-
-void LoadImages(const string &strFile, vector<string> &vstrImageFilenames, vector<string> &vstrNormalFilenames, vector<double> &vTimestamps,vector<cv::Mat> &gtPose)
+void LoadImages(const string &strFile, vector<string> &vstrImageFilenames, vector<string> &vstrNormalFilenames, vector<double> &vTimestamps)
 {
     ifstream f,gtF;
     f.open(strFile.c_str());
-
     // skip first three lines
     string s0;
     getline(f,s0);
     getline(f,s0);
     getline(f,s0);
-
     while(!f.eof())
     {
         string s;

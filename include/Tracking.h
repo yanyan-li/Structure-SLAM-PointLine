@@ -76,6 +76,10 @@ public:
 
     // Preprocess the input and call Track(). Extract features and performs stereo matching.
     cv::Mat GrabImageMonocularWithNormal(const cv::Mat &im,const cv::Mat &normal,  const double &timestamp);
+
+    cv::Mat GrabImageMonocularWithPL(const cv::Mat &im,  const double &timestamp);
+
+
     void SetLocalMapper(LocalMapping* pLocalMapper);
     void SetLoopClosing(LoopClosing* pLoopClosing);
     void SetViewer(Viewer* pViewer);
@@ -136,12 +140,13 @@ public:
 
 protected:
 
-    // Main tracking function. It is independent of the input sensor.
-    void Track();
-    void TrackWithNormal();
+    // Main tracking function under the assumption of Manhattan World.
+    void TrackWithPL();
 
     void MonocularInitializationWithNormal();
-    void CreateInitialMapMonoWithLine();
+    void CreateInitialMapMonoWithPL();
+    void MonocularInitialization();
+    void CreateInitialMapMonocular();
     cv::Mat SeekManhattanFrame(vector<SurfaceNormal> &vTempSurfaceNormal,vector<FrameLine> &vVanishingDirection);
 
 

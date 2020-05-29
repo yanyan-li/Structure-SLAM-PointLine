@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project(ORB_SLAM2)
+project(StructureSLAM)
 
 IF(NOT CMAKE_BUILD_TYPE)
   SET(CMAKE_BUILD_TYPE Release)
@@ -44,7 +44,7 @@ ${PROJECT_SOURCE_DIR}
 ${PROJECT_SOURCE_DIR}/include
 ${EIGEN3_INCLUDE_DIR}
 ${Pangolin_INCLUDE_DIRS}
-        ${PCL_INCLUDE_DIRS}
+${PCL_INCLUDE_DIRS}
 )
 
 add_definitions( ${PCL_DEFINITIONS} )
@@ -73,9 +73,8 @@ src/KeyFrameDatabase.cc
 src/Initializer.cc
 src/Sim3Solver.cc
 src/Viewer.cc
-#src/pointcloudmapping.cc
 src/Lineextractor.cpp
-        src/CornerFrameDatebase.cpp
+src/CornerFrameDatebase.cpp
 src/ExtractLineSegment.cpp 
 src/MapLine.cpp 
 src/LSDmatcher.cpp
@@ -91,8 +90,8 @@ ${PCL_LIBRARIES}
         )
 # Build examples
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples/Monocular)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Examples)
 
-add_executable(mono_tum
-Examples/Monocular/mono_tum.cc)
-target_link_libraries(mono_tum ${PROJECT_NAME})
+add_executable(Structure-SLAM
+Examples/Structure-SLAM.cc)
+target_link_libraries(Structure-SLAM ${PROJECT_NAME})

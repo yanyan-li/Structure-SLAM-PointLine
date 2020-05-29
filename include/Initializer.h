@@ -47,22 +47,11 @@ namespace StructureSLAM
         // 用reference frame来初始化，这个reference frame就是SLAM正式开始的第一帧
         Initializer(const Frame &ReferenceFrame, float sigma = 1.0, int iterations = 200);
 
-        // Computes in parallel a fundamental matrix and a homography
-        // Selects a model and tries to recover the motion and the structure from motion
-        // 用current frame，也就是用SLAM逻辑上的第二帧来初始化整个SLAM，得到最开始两帧之间的R，t，以及点云
-        bool Initialize(const Frame &CurrentFrame, const vector<int> &vMatches12,
-                        cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated);
-
         // 函数重载的初始化函数，包括点特征和线特征, R21和t21均为第一帧到第二帧的变换
         bool Initialize(const Frame &CurrentFrame, const vector<int> &vMatches12,
                         cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated,
                         vector<pair<int,int>> &vLineMatches, vector<cv::Point3f> &vLineS3D, vector<cv::Point3f> &vLineE3D,
                         vector<bool> &vbLineTriangulated);
-
-        bool InitializeManhattanWorld(const Frame &mInitialFrame,const Frame &CurrentFrame, const vector<int> &vMatches12,
-                                      cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated,
-                                      vector<pair<int,int>> &vLineMatches, vector<cv::Point3f> &vLineS3D, vector<cv::Point3f> &vLineE3D,
-                                      vector<bool> &vbLineTriangulated);
 
 
     private:
@@ -106,10 +95,8 @@ namespace StructureSLAM
         void DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t);
 
         // 线特征的三角化
-        // 仿照点特征，采用两帧匹配的特征线段的端点
-        void LineTriangulate(const KeyLine &kl1, const KeyLine &kl2, const cv::Mat &P1, const cv::Mat &P2, cv::Mat &LineStart3D, cv::Mat &LineEnd3D);
         // 结合极平面
-        void LineTriangulate(const KeyLine &kl1, const KeyLine &kl2, const cv::Mat &P1, const cv::Mat &P2, const Vector3d &klf1, const Vector3d &klf2,
+        void LineTriangulate(const KeyLine &kl1, const KeyLine &kl2,const cv::Mat &P1, const cv::Mat &P2, const Vector3d &klf1, const Vector3d &klf2,
                              cv::Mat &LineStart3D, cv::Mat &LineEnd3D);
 
         // 用计算好的R t，来三角化计算线特征
@@ -155,6 +142,6 @@ namespace StructureSLAM
 
     };
 
-} //namespace ORB_SLAM
+} //namespace StructureSLAM
 
 #endif // INITIALIZER_H

@@ -28,17 +28,13 @@
 #define FRAME_H
 
 #include<vector>
-
 #include "MapPoint.h"
 #include "Thirdparty/DBoW2/DBoW2/BowVector.h"
 #include "Thirdparty/DBoW2/DBoW2/FeatureVector.h"
 #include "ORBVocabulary.h"
 #include "KeyFrame.h"
 #include "ORBextractor.h"
-
 #include <opencv2/opencv.hpp>
-
-
 #include "ExtractLineSegment.h"
 #include "MapLine.h"
 #include "Lineextractor.h"
@@ -56,18 +52,7 @@ namespace StructureSLAM
     {
     public:
 
-        //Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc,/*提取直线特征*/ cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
-        void ExtractLSD(int flag,const cv::Mat &imGray,const cv::Mat &imDepth);
-        void isLineGood(const cv::Mat &imGray, const cv::Mat &imDepth);
-        void isLineGood(const cv::Mat &imGray,  const cv::Mat &imDepth,cv::Mat K);
         vector<cv::Point3d> mv3DLineforMap;
-        //使用LSD提取的直线
-        //ntuple_list mDetectedLines;
-        /**
-         * 还需要哪些参数，
-         * 描述子，数量，
-         * */
-
         vector<FrameLine> mvframeLine;//have the same size with 3D lines
         vector<FrameLine> vAll2Dlines;//all the 2D lines in this Frame
         vector<Vector6d > mvLines3D;
@@ -82,29 +67,14 @@ namespace StructureSLAM
 
         // Copy constructor.
         Frame(const Frame &frame);
-
-        // Constructor for stereo cameras.
-        Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
-
-        // Constructor for RGB-D cameras.
-        Frame(const cv::Mat &imGray,const double &timeStamp, const cv::Mat &imDepth,  ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
-
-        // Constructor for Monocular.
-        Frame(const cv::Mat &imGray,  const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
-
-        // Constructor for Monocular with normal cameras.
-        Frame(const cv::Mat &imGray, const cv::Mat &imNormal, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
+        Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
 
         // Extract ORB on the image. 0 for left image and 1 for right image.
         void ExtractORB(int flag, const cv::Mat &im);
-
         // extract line feature, 自己添加的
         void ExtractLSD(const cv::Mat &im);
-
         //点线特征选择
         void featureSelect(const cv::Mat &im);
-        // 计算线特征端点的3D坐标，自己添加的
-        void ComputeLine3D(Frame &frame1, Frame &frame2);
 
         // 自己添加的，线特征描述子MAD
         void lineDescriptorMAD( vector<vector<DMatch>> matches, double &nn_mad, double &nn12_mad) const;
@@ -139,12 +109,7 @@ namespace StructureSLAM
         vector<size_t> GetLinesInArea(const float &x1, const float &y1, const float &x2, const float &y2,
                                       const float &r, const int minLevel=-1, const int maxLevel=-1) const;
 
-        // Search a match for each keypoint in the left image to a keypoint in the right image.
-        // If there is a match, depth is computed and the right coordinate associated to the left keypoint is stored.
-        void ComputeStereoMatches();
 
-        // Associate a "right" coordinate to a keypoint if there is valid depth in the depthmap.
-        void ComputeStereoFromRGBD(const cv::Mat &imDepth);
         void AnalysisSurfaceNormalfromImage(const cv::Mat &imNormal, cv::Mat &K);
 
         // Backprojects a keypoint (if stereo/depth info available) into 3D world coordinates.
@@ -187,8 +152,6 @@ namespace StructureSLAM
         bool dealWithLine;
         float blurNumber;
         // Vector of keypoints (original for visualization) and undistorted (actually used by the system).
-        // In the stereo case, mvKeysUn is redundant as images must be rectified.
-        // In the RGB-D case, RGB images can be distorted.
         std::vector<cv::KeyPoint> mvKeys, mvKeysRight;
         std::vector<cv::KeyPoint> mvKeysUn;
 
@@ -267,13 +230,10 @@ namespace StructureSLAM
         // Only for the RGB-D case. Stereo must be already rectified!
         // (called in the constructor).
         void UndistortKeyPoints();
-
         // Computes image bounds for the undistorted image (called in the constructor).
         void ComputeImageBounds(const cv::Mat &imLeft);
-
         // Assign keypoints to the grid for speed up feature matching (called in the constructor).
         void AssignFeaturesToGrid();
-
         // Rotation, translation and camera center
         cv::Mat mRcw;
         cv::Mat mtcw;
@@ -281,6 +241,6 @@ namespace StructureSLAM
         cv::Mat mOw; //==mtwc
     };
 
-}// namespace ORB_SLAM
+}// namespace StructureSLAM
 
 #endif // FRAME_H
