@@ -1045,7 +1045,7 @@ bool Tracking::TrackReferenceKeyFrame()
         mCurrentFrame.SetPose(mLastFrame.mTcw);
         bool optiPL= true;
 
-        Optimizer::PoseOptimization(&mCurrentFrame);
+        Optimizer::PoseOptimization(&mCurrentFrame,optiPL);
         cout<<"tracking reference,pose after opti"<<mCurrentFrame.mTcw<<endl;
         // Discard outliers
         // 剔除优化后的outlier匹配点（MapPoints）
@@ -1256,7 +1256,7 @@ bool Tracking::TrackWithMotionModel()
         // Optimize frame pose with all matches
         // --step5: 优化位姿
         cout<<"tracking motion model,pose before opti"<<mCurrentFrame.mTcw<<endl;
-        Optimizer::PoseOptimization(&mCurrentFrame);
+        Optimizer::PoseOptimization(&mCurrentFrame, true);
         cout<<"tracking motion model,pose after opti"<<mCurrentFrame.mTcw<<endl;
         // Discard outliers
         // --step6：优化位姿后剔除outlier的mvpMapPoints
@@ -1327,7 +1327,7 @@ bool Tracking::TrackLocalMapWithLines()
 
         //cout<<"Tracking: start Poseoptimization"<<endl;
         // step4：更新局部所有MapPoints和MapLines后对位姿再次优化
-        Optimizer::PoseOptimization(&mCurrentFrame);
+        Optimizer::PoseOptimization(&mCurrentFrame, true);
         mnMatchesInliers = 0;
         mnLineMatchesInliers = 0;
 

@@ -281,97 +281,95 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
 void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<MapPoint *> &vpMP, const vector<MapLine *> &vpML,
                                  int nIterations, bool* pbStopFlag, const unsigned long nLoopKF, const bool bRobust)
 {
-    double invSigma = 0.01;
-    vector<bool> vbNotIncludedMP;
-    vbNotIncludedMP.resize(vpMP.size());
 
-    // 1.构造求解器
+    vector<bool> vbNotIncludedMP, vbNotIncludedML, vbNotIncludedMPL;
+    vbNotIncludedMP.resize(vpMP.size());
+    vbNotIncludedML.resize(vpML.size());
+
     g2o::SparseOptimizer optimizer;
-    g2o::BlockSolver_6_3::LinearSolverType * linearSolver;
+    g2o::BlockSolver_6_3::LinearSolverType *linearSolver;
 
     linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();
 
-    g2o::BlockSolver_6_3 * solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
+    g2o::BlockSolver_6_3 *solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
 
-    g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
+    g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
     optimizer.setAlgorithm(solver);
 
-    if(pbStopFlag)
+    if (pbStopFlag)
         optimizer.setForceStopFlag(pbStopFlag);
 
     long unsigned int maxKFid = 0;
 
-    cout << "======= Optimizer::BundleAdjustment with lines ======="<< endl;
     // Set KeyFrame vertices
-    // 2.添加关键帧顶点
-    for(size_t i=0; i<vpKFs.size(); i++)
-    {
-        KeyFrame* pKF = vpKFs[i];
-        if(pKF->isBad())
+    for (size_t i = 0; i < vpKFs.size(); i++) {
+        KeyFrame *pKF = vpKFs[i];
+        if (pKF->isBad())
             continue;
-        g2o::VertexSE3Expmap * vSE3 = new g2o::VertexSE3Expmap();
+        g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
         vSE3->setEstimate(Converter::toSE3Quat(pKF->GetPose()));
-        vSE3->setId(pKF->mnCornerId);
-//        cout << "KeyFrame Id = " << pKF->mnId << endl;
-        vSE3->setFixed(pKF->mnCornerId==0);
+        vSE3->setId(pKF->mnId);
+        vSE3->setFixed(pKF->mnId == 0);
         optimizer.addVertex(vSE3);
-        if(pKF->mnCornerId>maxKFid)
-            maxKFid=pKF->mnCornerId;
+        if (pKF->mnId > maxKFid)
+            maxKFid = pKF->mnId;
     }
 
     const float thHuber2D = sqrt(5.99);
     const float thHuber3D = sqrt(7.815);
 
-    vector<int> MapPointID;
+    vector<g2o::EdgeSE3ProjectXYZ *> vpEdgesMono;
+    vector<g2o::EdgeStereoSE3ProjectXYZ *> vpEdgesStereo;
 
-    cout<<" ********************************Set MapPoint vertices*******************************"<<endl;
-    // 3.设置MapPoint的顶点
-    for(size_t i=0; i<vpMP.size(); i++)
-    {
-        MapPoint* pMP = vpMP[i];
-        if(pMP->isBad())
+    long unsigned int maxMapPointId = maxKFid;
+
+    int totalEdges = 0;
+    // Set MapPoint vertices
+    for (size_t i = 0; i < vpMP.size(); i++) {
+        MapPoint *pMP = vpMP[i];
+
+        if (pMP->isBad())
             continue;
-        g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
+
+        g2o::VertexSBAPointXYZ *vPoint = new g2o::VertexSBAPointXYZ();
         vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));
-        const int id = pMP->mnId+maxKFid+1;  //在corner中，这是5或6,固定的数
+        const int id = pMP->mnId + maxKFid + 1;
         vPoint->setId(id);
         vPoint->setMarginalized(true);
         optimizer.addVertex(vPoint);
-//        cout << "MapPoint Id = " << id << endl;
-        MapPointID.push_back(id);
 
-        const map<KeyFrame*,size_t> observations = pMP->GetObservations();
+        if (id > maxMapPointId) {
+            maxMapPointId = id;
+        }
+
+        const map<KeyFrame *, size_t> observations = pMP->GetObservations();
 
         int nEdges = 0;
         //SET EDGES
-        // 4.设置MapPoint和位姿之间的误差边
-        for(map<KeyFrame*,size_t>::const_iterator mit=observations.begin(); mit!=observations.end(); mit++)
-        {
+        for (map<KeyFrame *, size_t>::const_iterator mit = observations.begin(); mit != observations.end(); mit++) {
 
-            KeyFrame* pKF = mit->first;
-            if(pKF->isBad() || pKF->mnCornerId>maxKFid)
+            KeyFrame *pKF = mit->first;
+            if (pKF->isBad() || pKF->mnId > maxKFid)
                 continue;
 
             nEdges++;
 
             const cv::KeyPoint &kpUn = pKF->mvKeysUn[mit->second];
 
-            if(pKF->mvuRight[mit->second]<0)
-            {
-                Eigen::Matrix<double,2,1> obs;
+            if (pKF->mvuRight[mit->second] < 0) {
+                Eigen::Matrix<double, 2, 1> obs;
                 obs << kpUn.pt.x, kpUn.pt.y;
 
-                g2o::EdgeSE3ProjectXYZ* e = new g2o::EdgeSE3ProjectXYZ();
+                g2o::EdgeSE3ProjectXYZ *e = new g2o::EdgeSE3ProjectXYZ();
 
-                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id)));
-                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKF->mnCornerId)));
+                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(id)));
+                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(pKF->mnId)));
                 e->setMeasurement(obs);
                 const float &invSigma2 = pKF->mvInvLevelSigma2[kpUn.octave];
-                e->setInformation(Eigen::Matrix2d::Identity()*invSigma2);
+                e->setInformation(Eigen::Matrix2d::Identity() * invSigma2);
 
-                if(bRobust)
-                {
-                    g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
+                if (bRobust) {
+                    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
                     e->setRobustKernel(rk);
                     rk->setDelta(thHuber2D);
                 }
@@ -382,25 +380,23 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
                 e->cy = pKF->cy;
 
                 optimizer.addEdge(e);
-            }
-            else    //双目
-            {
-                Eigen::Matrix<double,3,1> obs;
+                vpEdgesMono.push_back(e);
+            } else {
+                Eigen::Matrix<double, 3, 1> obs;
                 const float kp_ur = pKF->mvuRight[mit->second];
                 obs << kpUn.pt.x, kpUn.pt.y, kp_ur;
 
-                g2o::EdgeStereoSE3ProjectXYZ* e = new g2o::EdgeStereoSE3ProjectXYZ();
+                g2o::EdgeStereoSE3ProjectXYZ *e = new g2o::EdgeStereoSE3ProjectXYZ();
 
-                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id)));
-                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKF->mnCornerId)));
+                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(id)));
+                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(pKF->mnId)));
                 e->setMeasurement(obs);
                 const float &invSigma2 = pKF->mvInvLevelSigma2[kpUn.octave];
-                Eigen::Matrix3d Info = Eigen::Matrix3d::Identity()*invSigma2;
+                Eigen::Matrix3d Info = Eigen::Matrix3d::Identity() * invSigma2;
                 e->setInformation(Info);
 
-                if(bRobust)
-                {
-                    g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
+                if (bRobust) {
+                    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
                     e->setRobustKernel(rk);
                     rk->setDelta(thHuber3D);
                 }
@@ -412,224 +408,235 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
                 e->bf = pKF->mbf;
 
                 optimizer.addEdge(e);
+                vpEdgesStereo.push_back(e);
             }
         }
 
-        if(nEdges==0)
-        {
+        totalEdges += nEdges;
+
+        if (nEdges == 0) {
             optimizer.removeVertex(vPoint);
-            vbNotIncludedMP[i]=true;
-        }
-        else
-        {
-            vbNotIncludedMP[i]=false;
+            vbNotIncludedMP[i] = true;
+        } else {
+            vbNotIncludedMP[i] = false;
         }
     }
 
-    sort(MapPointID.begin(), MapPointID.end());
-    int maxMapPointID = MapPointID[MapPointID.size()-1];
-    cout << "maxMapPointID = " << maxMapPointID << endl;
-    // ***************************Set MapLine vertices******************************
-    // 5.设置MapLine的顶点，线段有两个端点，因此顶点数量和对应的边的数量为MapLine数量的2倍
-    // 5.1 先设置线段的起始点
-    for(size_t i=0; i<vpML.size(); i++)
-    {
-        MapLine* pML = vpML[i];
-        if(pML->isBad())
+    cout << "GBA: Total point edges: " << totalEdges << endl;
+    cout << "GBA: Max Point id: " << maxMapPointId << endl;
+
+    int maxMapLineId = maxMapPointId;
+
+    for (size_t i = 0; i < vpML.size(); i++) {
+        MapLine *pML = vpML[i];
+
+        if (pML->isBad())
             continue;
-//        VertexLinePointXYZ* vStartP = new VertexLinePointXYZ();   //用自定义的顶点
-        g2o::VertexSBAPointXYZ* vStartP = new g2o::VertexSBAPointXYZ();
-        vStartP->setEstimate(pML->GetWorldPos().head(3));
-        const int ids = pML->mnCornerId + maxKFid + maxMapPointID + 1;
-        vStartP->setId(ids);
-        vStartP->setMarginalized(true);
-        optimizer.addVertex(vStartP);
-        cout << "optimization: MapLine StartP Id = " << ids << endl;
 
-        const map<KeyFrame*,size_t> observations = pML->mObservations;
+        g2o::VertexSBAPointXYZ *vStartPoint = new g2o::VertexSBAPointXYZ();
+        vStartPoint->setEstimate(pML->GetWorldPos().head(3));
+        const int id1 = (2 * pML->mnId) + 1 + maxMapPointId;
+        vStartPoint->setId(id1);
+        vStartPoint->setMarginalized(true);
+        optimizer.addVertex(vStartPoint);
 
-        cout << "*****MapLine Id, a observation = " << observations.size()<< endl;
+        g2o::VertexSBAPointXYZ *vEndPoint = new g2o::VertexSBAPointXYZ();
+        vEndPoint->setEstimate(pML->GetWorldPos().tail(3));
+        const int id2 = (2 * (pML->mnId + 1)) + maxMapPointId;
+        vEndPoint->setId(id2);
+        vEndPoint->setMarginalized(true);
+        optimizer.addVertex(vEndPoint);
 
+        if (id2 > maxMapLineId) {
+            maxMapLineId = id2;
+        }
 
-        int nLineEdges = 0;
+        cout << "GBA: Line id1: " << id1 << ", id2: " << id2 << ", Max: " << maxMapLineId << endl;
 
-        // 设置线段起始点和相机位姿之间的边
-        for(map<KeyFrame*, size_t>::const_iterator mit=observations.begin(); mit!=observations.end(); mit++)
-        {
-            cout << "**MapLine Id, this observation = " << mit->first->mnId<<","<<mit->second << endl;
-            KeyFrame* pKF = mit->first;
-            if(pKF->isBad() || pKF->mnCornerId > maxKFid)
+        const map<KeyFrame *, size_t> observations = pML->GetObservations();
+
+        int nEdges = 0;
+
+        for (map<KeyFrame *, size_t>::const_iterator mit = observations.begin(); mit != observations.end(); mit++) {
+            KeyFrame *pKF = mit->first;
+
+            if (pKF->isBad() || pKF->mnId > maxKFid)
                 continue;
 
-            nLineEdges++;
+            nEdges++;
 
-            Eigen::Vector3d line_obs;
-            line_obs = pKF->mvKeyLineFunctions[mit->second];
-            cout << "optimization: MapLine StartP line_obs = " << line_obs.x() << endl;
-            EdgeLineProjectXYZ* e = new EdgeLineProjectXYZ();
+            Eigen::Vector3d lineObs = pKF->mvKeyLineFunctions[mit->second];
 
-            e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(ids)));
-            e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKF->mnCornerId)));
-            e->setMeasurement(line_obs);
-            e->setInformation(Eigen::Matrix3d::Identity()*invSigma);
+            EdgeLineProjectXYZ *es = new EdgeLineProjectXYZ();
+            es->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(id1)));
+            es->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(pKF->mnId)));
+            es->setMeasurement(lineObs);
+            es->setInformation(Eigen::Matrix3d::Identity());
 
-            if(bRobust)
-            {
-                g2o::RobustKernelHuber* rk_line_s = new g2o::RobustKernelHuber;
-                e->setRobustKernel(rk_line_s);
-                rk_line_s->setDelta(thHuber2D);
+            if (bRobust) {
+                g2o::RobustKernelHuber *rks = new g2o::RobustKernelHuber;
+                es->setRobustKernel(rks);
+                rks->setDelta(thHuber3D);
             }
 
-            e->fx = pKF->fx;
-            e->fy = pKF->fy;
-            e->cx = pKF->cx;
-            e->cy = pKF->cy;
+            es->fx = pKF->fx;
+            es->fy = pKF->fy;
+            es->cx = pKF->cx;
+            es->cy = pKF->cy;
 
-            e->Xw = pML->mWorldPos.head(3);
+            optimizer.addEdge(es);
 
-            optimizer.addEdge(e);
+            EdgeLineProjectXYZ *ee = new EdgeLineProjectXYZ();
+            ee->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(id2)));
+            ee->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(pKF->mnId)));
+            ee->setMeasurement(lineObs);
+            ee->setInformation(Eigen::Matrix3d::Identity());
+
+            if (bRobust) {
+                g2o::RobustKernelHuber *rke = new g2o::RobustKernelHuber;
+                ee->setRobustKernel(rke);
+                rke->setDelta(thHuber3D);
+            }
+
+            ee->fx = pKF->fx;
+            ee->fy = pKF->fy;
+            ee->cx = pKF->cx;
+            ee->cy = pKF->cy;
+
+            optimizer.addEdge(ee);
+        }
+
+        if (nEdges == 0) {
+            optimizer.removeVertex(vStartPoint);
+            optimizer.removeVertex(vEndPoint);
+            vbNotIncludedML[i] = true;
+        } else {
+            vbNotIncludedML[i] = false;
         }
     }
 
-    cout<<"Optimization: finish adding startlines"<<endl;
-    // 5.2 设置线段终止点顶点
-    for(size_t i=0; i<vpML.size(); i++)
-    {
-        MapLine* pML = vpML[i];
-        if(pML->isBad())
-            continue;
-//        VertexLinePointXYZ* vEndP = new VertexLinePointXYZ();     //自定义的顶点
-        g2o::VertexSBAPointXYZ* vEndP = new VertexSBAPointXYZ();
-        vEndP->setEstimate(pML->GetWorldPos().tail(3));
-        const int ide = pML->mnCornerId + maxKFid + maxMapPointID + vpML.size() + 1;
-        vEndP->setId(ide);
-        vEndP->setMarginalized(true);
-        optimizer.addVertex(vEndP);
-       cout << "MapLine EndP Id = " << ide << endl;
-
-        const map<KeyFrame*,size_t> observations = pML->mObservations;
-        cout << "*****MapPoint Id, a observation = " << observations.size()<< endl;
-        int nLineEdges = 0;
-
-        // 设置线段终止点和相机位姿之间的边
-        for(map<KeyFrame*, size_t>::const_iterator mit=observations.begin(); mit!=observations.end(); mit++)
-        {
-            cout << "**MapPoint Id, this observation = " << mit->first->mnId<<","<<mit->second << endl;
-
-            KeyFrame* pKF = mit->first;
-            if(pKF->isBad() || pKF->mnCornerId > maxKFid)
-                continue;
-
-            nLineEdges++;
-
-            Eigen::Vector3d line_obs;
-            line_obs = pKF->mvKeyLineFunctions[mit->second];
-
-            EdgeLineProjectXYZ* e = new EdgeLineProjectXYZ();
-
-            e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(ide)));
-            e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKF->mnCornerId)));
-            e->setMeasurement(line_obs);
-            e->setInformation(Eigen::Matrix3d::Identity()*invSigma);
-
-            if(bRobust)
-            {
-                g2o::RobustKernelHuber* rk_line_s = new g2o::RobustKernelHuber;
-                e->setRobustKernel(rk_line_s);
-                rk_line_s->setDelta(thHuber2D);
-            }
-
-            e->fx = pKF->fx;
-            e->fy = pKF->fy;
-            e->cx = pKF->cx;
-            e->cy = pKF->cy;
-
-            e->Xw = pML->mWorldPos.head(3);
-
-            optimizer.addEdge(e);
-        }
-    }
 
     // Optimize!
     optimizer.initializeOptimization();
     optimizer.optimize(nIterations);
 
+    int bad = 0;
+    int PNMono = 0;
+    double PEMono = 0;
+    for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++) {
+        g2o::EdgeSE3ProjectXYZ *e = vpEdgesMono[i];
+
+
+        const float chi2 = e->chi2();
+        //cout<<"optimize chi2"<<chi2<<endl;
+        PNMono++;
+        PEMono += chi2;
+
+        if (chi2 > thHuber2D * thHuber2D) {
+            bad++;
+            cout << " GBA: Bad point: " << chi2 << endl;
+        }
+    }
+
+    if (PNMono == 0)
+        cout << "GBA: No mono points " << " ";
+    else
+        cout << "GBA: Mono points: " << PEMono / PNMono << " ";
+
+    int PNStereo = 0;
+    double PEStereo = 0;
+    for (size_t i = 0, iend = vpEdgesStereo.size(); i < iend; i++) {
+        g2o::EdgeStereoSE3ProjectXYZ *e = vpEdgesStereo[i];
+
+        const float chi2 = e->chi2();
+        //cout<<"optimize chi2"<<chi2<<endl;
+        PNStereo++;
+        PEStereo += chi2;
+
+        if (chi2 > thHuber3D * thHuber3D) {
+            bad++;
+            cout << "GBA: Bad stereo point: " << chi2 << endl;
+        }
+    }
+    if (PNStereo == 0)
+        cout << "GBA: No stereo points " << " ";
+    else
+        cout << "GBA: Stereo points: " << PEStereo / PNStereo << endl;
+
+    cout << "GBA: Total bad point edges: " << bad << endl;
+
     // Recover optimized data
-    // 6.得到优化的结果
 
     //Keyframes
-    for(size_t i=0; i<vpKFs.size(); i++)
-    {
-        KeyFrame* pKF = vpKFs[i];
-        if(pKF->isBad())
+    for (size_t i = 0; i < vpKFs.size(); i++) {
+        KeyFrame *pKF = vpKFs[i];
+        if (pKF->isBad())
             continue;
-        g2o::VertexSE3Expmap* vSE3 = static_cast<g2o::VertexSE3Expmap*>(optimizer.vertex(pKF->mnCornerId));
+        g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pKF->mnId));
         g2o::SE3Quat SE3quat = vSE3->estimate();
-        if(nLoopKF==0)
-        {
+        if (nLoopKF == 0) {
             pKF->SetPose(Converter::toCvMat(SE3quat));
-        }
-        else
-        {
-            pKF->mTcwGBA.create(4,4,CV_32F);
+        } else {
+            pKF->mTcwGBA.create(4, 4, CV_32F);
             Converter::toCvMat(SE3quat).copyTo(pKF->mTcwGBA);
             pKF->mnBAGlobalForKF = nLoopKF;
         }
     }
 
     //Points
-    for(size_t i=0; i<vpMP.size(); i++)
-    {
-        if(vbNotIncludedMP[i])
+    for (size_t i = 0; i < vpMP.size(); i++) {
+        if (vbNotIncludedMP[i])
             continue;
 
-        MapPoint* pMP = vpMP[i];
+        MapPoint *pMP = vpMP[i];
 
-        if(pMP->isBad())
+        if (pMP->isBad())
             continue;
-        g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(pMP->mnId+maxKFid+1));
 
-        if(nLoopKF==0)
-        {
+        g2o::VertexSBAPointXYZ *vPoint = static_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(pMP->mnId + maxKFid + 1));
+
+        double dis = cv::norm(Converter::toCvMat(vPoint->estimate()) - pMP->GetWorldPos());
+        if (dis > 0.5) {
+            std::cout << "Point id: " << pMP->mnId << ", bad: " << pMP->isBad()  << ", pose - before: " << pMP->GetWorldPos().t()
+                      << ", after: " << Converter::toCvMat(vPoint->estimate()).t() << std::endl;
+        }
+
+        if (nLoopKF == 0) {
             pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));
             pMP->UpdateNormalAndDepth();
-        }
-        else
-        {
-            pMP->mPosGBA.create(3,1,CV_32F);
+        } else {
+            pMP->mPosGBA.create(3, 1, CV_32F);
             Converter::toCvMat(vPoint->estimate()).copyTo(pMP->mPosGBA);
             pMP->mnBAGlobalForKF = nLoopKF;
         }
     }
 
-    //LineSegment Points
-    for(size_t i=0; i<vpML.size(); i++)
-    {
-        if(vbNotIncludedMP[i])
+    //Lines
+    for (size_t i = 0; i < vpML.size(); i++) {
+
+        if (vbNotIncludedML[i])
             continue;
 
-        MapLine* pML = vpML[i];
+        MapLine *pML = vpML[i];
 
-        if(pML->isBad())
+        if (pML->isBad())
             continue;
 
-//        VertexLinePointXYZ* vStartP = static_cast<VertexLinePointXYZ*>(optimizer.vertex(pML->mnId + maxKFid + vpMP.size() + 1));  //自定义的顶点
-//        VertexLinePointXYZ* vEndP = static_cast<VertexLinePointXYZ*>(optimizer.vertex(2*pML->mnId + maxKFid + vpMP.size() + 1));  //自定义的顶点
+        g2o::VertexSBAPointXYZ *vStartPoint = static_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(
+                (2 * pML->mnId) + 1 + maxMapPointId));
+        g2o::VertexSBAPointXYZ *vEndPoint = static_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(
+                2 * (pML->mnId + 1) + maxMapPointId));
 
-        g2o::VertexSBAPointXYZ* vStartP = static_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(pML->mnCornerId + maxKFid + maxMapPointID + 1));
-        g2o::VertexSBAPointXYZ* vEndP = static_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(pML->mnCornerId + maxKFid + maxMapPointID + vpML.size() + 1));
-
-        if(nLoopKF==0)
-        {
-            Vector6d LinePos;
-            LinePos << Converter::toVector3d(Converter::toCvMat(vStartP->estimate())), Converter::toVector3d(Converter::toCvMat(vEndP->estimate()));
-            pML->SetWorldPos(LinePos);
+        if (nLoopKF == 0) {
+            Vector6d linePos;
+            linePos << vStartPoint->estimate(), vEndPoint->estimate();
+            pML->SetWorldPos(linePos);
             pML->UpdateAverageDir();
-        } else
-        {
+        } else {
             pML->mPosGBA.create(6, 1, CV_32F);
-            Converter::toCvMat(vStartP->estimate()).copyTo(pML->mPosGBA.rowRange(0,3));
-            Converter::toCvMat(vEndP->estimate()).copyTo(pML->mPosGBA.rowRange(3,6));
+            Converter::toCvMat(vStartPoint->estimate()).copyTo(pML->mPosGBA.rowRange(0, 3));
+            Converter::toCvMat(vEndPoint->estimate()).copyTo(pML->mPosGBA.rowRange(3, 6));
+            pML->mnBAGlobalForKF = nLoopKF;
         }
     }
 
@@ -1585,564 +1592,6 @@ void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool* pbStopFlag, Map* pMap
     }
 }
 
-///包含有线特征的局部BA
-void Optimizer::LocalBundleAdjustmentWithLine(KeyFrame *pKF, bool *pbStopFlag, Map *pMap)
-{
-    double invSigma = 0.01;
-    // Local KeyFrames: First Breath Search from Current KeyFrame
-    list<KeyFrame*> lLocalKeyFrames;
-
-    // step1: 将当前关键帧加入到lLocalKeyFrames
-    lLocalKeyFrames.push_back(pKF);
-    pKF->mnBALocalForKF = pKF->mnId;
-
-    // step2:找到关键帧连接的关键帧（一级相连），加入到lLocalKeyFrames中
-
-    const vector<KeyFrame*> vNeighKFs = pKF->GetVectorCovisibleKeyFrames();
-    cout<<"Optimizer: 关键帧相连的帧:"<<vNeighKFs.size()<<endl;
-    for(int i=0, iend=vNeighKFs.size(); i<iend; i++)
-    {
-        KeyFrame* pKFi = vNeighKFs[i];
-        pKFi->mnBALocalForKF = pKF->mnId;
-        if(!pKFi->isBad())
-            lLocalKeyFrames.push_back(pKFi);
-    }
-
-    // step3：将lLocalKeyFrames的MapPoints加入到lLocalMapPoints
-    list<MapPoint*> lLocalMapPoints;
-    for(list<KeyFrame*>::iterator lit=lLocalKeyFrames.begin(), lend=lLocalKeyFrames.end(); lit!=lend; lit++)
-    {
-        vector<MapPoint*> vpMPs = (*lit)->GetMapPointMatches();
-        cout<<"Optimizer: get mappointMatches():"<<vpMPs.size()<<endl;
-        for(vector<MapPoint*>::iterator vit=vpMPs.begin(), vend=vpMPs.end(); vit!=vend; vit++)
-        {
-            MapPoint* pMP = *vit;
-            if(pMP)
-            {
-                if(!pMP->isBad())
-                {
-                    if(pMP->mnBALocalForKF!=pKF->mnId)
-                    {
-                        lLocalMapPoints.push_back(pMP);
-                        pMP->mnBALocalForKF=pKF->mnId;
-                    }
-                }
-            }
-        }
-    }
-    cout<<"Optimizer: finish adding points"<<endl;
-    // step4: 遍历lLocalKeyFrames，将每个关键帧所能观测到的MapLine提取出来，放到lLocalMapLines
-    list<MapLine*> lLocalMapLines;
-    vector<long unsigned int> mlID;
-    for(list<KeyFrame*>::iterator lit=lLocalKeyFrames.begin(), lend=lLocalKeyFrames.end(); lit!=lend; lit++)
-    {
-        vector<MapLine*> vpMLs = (*lit)->GetMapLineMatches();
-        cout<<"Optimizer: get mapLineMatches():"<<vpMLs.size()<<endl;
-        for(vector<MapLine*>::iterator vit=vpMLs.begin(), vend=vpMLs.end(); vit!=vend; vit++)
-        {
-
-            MapLine* pML = *vit;
-            if(pML)
-            {
-                cout<<"Optimizer: mapline exist"<<endl;
-                if(!pML->isBad())
-                {
-                    cout<<"Optimizer: mapline is not bad"<<endl;
-                    if(pML->mnBALocalForKF!=pKF->mnId)
-                    {
-                        lLocalMapLines.push_back(pML);
-                        pML->mnBALocalForKF = pKF->mnId;
-                        mlID.push_back(pML->mnId);
-                        cout<<"Optimizer:maplinesmatches id: "<<pKF->mnId<<endl;
-                    }
-                }
-            }
-        }
-    }
-
-    cout<<"Optimizer: finish adding lines: size:"<< lLocalMapLines.size()<<endl;
-#if 0
-    for(list<MapLine*>::iterator lit=lLocalMapLines.begin(), lend=lLocalMapLines.end(); lit!=lend; lit++)
-{
-    int i=0;
-    if(count(mlID.begin(), mlID.end(), mlID[i])>1)
-    {
-        cout << "exist ===============" << endl;
-        lit = lLocalMapLines.erase(lit);
-    }
-    i++;
-}
-#endif
-
-    // step5: 得到能被局部MapPoints观测到，但不属于局部关键帧的关键帧，这些关键帧在局部BA优化时固定
-    list<KeyFrame*> lFixedCameras;
-    for(list<MapPoint*>::iterator lit=lLocalMapPoints.begin(), lend=lLocalMapPoints.end(); lit!=lend; lit++)
-    {
-        map<KeyFrame*, size_t > observations = (*lit)->GetObservations();
-        for(map<KeyFrame*, size_t>::iterator mit=observations.begin(), mend=observations.end(); mit!=mend; mit++)
-        {
-            KeyFrame* pKFi = mit->first;
-
-            if(pKFi->mnBALocalForKF!=pKF->mnId && pKFi->mnBAFixedForKF!=pKF->mnId)
-            {
-                pKFi->mnBAFixedForKF=pKF->mnId;
-                if(!pKFi->isBad())
-                    lFixedCameras.push_back(pKFi);
-            }
-        }
-    }
-
-    // step6：构造g2o优化器
-    g2o::SparseOptimizer optimizer;
-    g2o::BlockSolver_6_3::LinearSolverType* linearSolver;
-
-    linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();
-
-    g2o::BlockSolver_6_3* solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
-
-    g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
-    optimizer.setAlgorithm(solver);
-
-    if(pbStopFlag)
-        optimizer.setForceStopFlag(pbStopFlag);
-
-    unsigned long maxKFid = 0;
-
-    cout<<"Optimizer: adding pose od local Keyframe"<<endl;
-    // step7：添加顶点，Pose of Local KeyFrame
-    for(list<KeyFrame*>::iterator lit=lLocalKeyFrames.begin(), lend=lLocalKeyFrames.end(); lit!=lend; lit++)
-    {
-        KeyFrame* pKFi = *lit;
-        g2o::VertexSE3Expmap* vSE3 = new g2o::VertexSE3Expmap();
-        vSE3->setEstimate(Converter::toSE3Quat(pKFi->GetPose()));
-        vSE3->setId(pKFi->mnId);
-//        cout << "KeyFrame Id = " << pKFi->mnId << endl;
-        vSE3->setFixed(pKFi->mnId==0);  //第一个关键帧需要Fix
-        optimizer.addVertex(vSE3);
-        if(pKFi->mnId>maxKFid)
-            maxKFid=pKFi->mnId;
-    }
-    cout<<"Optimizer:  adding fixed keyframe"<<endl;
-    // step8:添加固定帧的顶点，Pose of Fixed KeyFrame
-    for(list<KeyFrame*>::iterator lit=lFixedCameras.begin(), lend=lFixedCameras.end(); lit!=lend; lit++)
-    {
-        KeyFrame* pKFi = *lit;
-        g2o::VertexSE3Expmap* vSE3 = new g2o::VertexSE3Expmap();
-        vSE3->setEstimate(Converter::toSE3Quat(pKFi->GetPose()));
-        vSE3->setId(pKFi->mnId);
-//        cout << "Fixed KeyFrame Id = " << pKFi->mnId << endl;
-        vSE3->setFixed(true);
-        optimizer.addVertex(vSE3);
-        if(pKFi->mnId > maxKFid)
-            maxKFid = pKFi->mnId;
-    }
-
-    vector<int> MapPointID;
-    //***********************Set MapPoint Vertices******************************
-    // step9：添加MapPoint的3D顶点
-    const int nExpectedSize = (lLocalKeyFrames.size()+lFixedCameras.size())*lLocalMapPoints.size();
-
-    vector<g2o::EdgeSE3ProjectXYZ*> vpEdgesMono;
-    vpEdgesMono.reserve(nExpectedSize);
-
-    vector<KeyFrame*> vpEdgeKFMono;
-    vpEdgeKFMono.reserve(nExpectedSize);
-
-    vector<MapPoint*> vpMapPointEdgeMono;
-    vpMapPointEdgeMono.reserve(nExpectedSize);
-
-    vector<g2o::EdgeStereoSE3ProjectXYZ*> vpEdgesStereo;
-    vpEdgesStereo.reserve(nExpectedSize);
-
-    vector<KeyFrame*> vpEdgeKFStereo;
-    vpEdgeKFStereo.reserve(nExpectedSize);
-
-    vector<MapPoint*> vpMapPointEdgeStereo;
-    vpMapPointEdgeStereo.reserve(nExpectedSize);
-
-    const float thHuberMono = sqrt(5.991);
-    const float thHuberStereo = sqrt(7.815);
-
-    for(list<MapPoint*>::iterator lit=lLocalMapPoints.begin(), lend=lLocalMapPoints.end(); lit!=lend; lit++)
-    {
-        MapPoint* pMP = *lit;
-        g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();
-        vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));
-        int id = pMP->mnId + maxKFid + 1;
-        vPoint->setId(id);
-//        cout << "MapPoint Id = " << id << endl;
-        vPoint->setMarginalized(true);
-        optimizer.addVertex(vPoint);
-        MapPointID.push_back(id);
-
-        const map<KeyFrame*, size_t > observations = pMP->GetObservations();
-
-        // Set Edges
-        for(map<KeyFrame*, size_t>::const_iterator mit=observations.begin(), mend=observations.end(); mit!=mend; mit++)
-        {
-            KeyFrame* pKFi = mit->first;
-
-            if(!pKFi->isBad())
-            {
-                const cv::KeyPoint &kpUn = pKFi->mvKeysUn[mit->second];
-
-                if(pKFi->mvuRight[mit->second]<0)
-                {
-                    Eigen::Matrix<double,2,1> obs;
-                    obs << kpUn.pt.x, kpUn.pt.y;
-
-                    g2o::EdgeSE3ProjectXYZ* e = new g2o::EdgeSE3ProjectXYZ();
-
-                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id)));
-                    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKFi->mnId)));
-                    e->setMeasurement(obs);
-                    const float &invSigma2 = pKFi->mvInvLevelSigma2[kpUn.octave];
-                    e->setInformation(Eigen::Matrix2d::Identity()*invSigma2);
-
-                    g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
-                    e->setRobustKernel(rk);
-                    rk->setDelta(thHuberMono);
-
-                    e->fx = pKFi->fx;
-                    e->fy = pKFi->fy;
-                    e->cx = pKFi->cx;
-                    e->cy = pKFi->cy;
-
-                    optimizer.addEdge(e);
-                    vpEdgesMono.push_back(e);
-                    vpEdgeKFMono.push_back(pKFi);
-                    vpMapPointEdgeMono.push_back(pMP);
-                }
-                else // Stereo observation
-                {
-                    Eigen::Matrix<double,3,1> obs;
-                    const float kp_ur = pKFi->mvuRight[mit->second];
-                    obs << kpUn.pt.x, kpUn.pt.y, kp_ur;
-
-                    g2o::EdgeStereoSE3ProjectXYZ* e = new g2o::EdgeStereoSE3ProjectXYZ();
-
-                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id)));
-                    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKFi->mnId)));
-                    e->setMeasurement(obs);
-                    const float &invSigma2 = pKFi->mvInvLevelSigma2[kpUn.octave];
-                    Eigen::Matrix3d Info = Eigen::Matrix3d::Identity()*invSigma2;
-                    e->setInformation(Info);
-
-                    g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
-                    e->setRobustKernel(rk);
-                    rk->setDelta(thHuberStereo);
-
-                    e->fx = pKFi->fx;
-                    e->fy = pKFi->fy;
-                    e->cx = pKFi->cx;
-                    e->cy = pKFi->cy;
-                    e->bf = pKFi->mbf;
-
-                    optimizer.addEdge(e);
-                    vpEdgesStereo.push_back(e);
-                    vpEdgeKFStereo.push_back(pKFi);
-                    vpMapPointEdgeStereo.push_back(pMP);
-                }
-
-            }
-        }
-    }
-
-    sort(MapPointID.begin(), MapPointID.end());
-    int maxMapPointID = MapPointID[MapPointID.size()-1];
-    cout << "Optimizer:************ maxMapPointID = " << maxMapPointID << " ************" << endl;
-
-    //***********************Set MapLine Vertices******************************
-    // step10：添加MapLine的顶点
-    const int nLineExpectedSize = (lLocalKeyFrames.size()+lFixedCameras.size())*lLocalMapLines.size();
-
-    cout<<"Optimizer: size of local maplines"<<lLocalMapLines.size()<<endl;
-    vector<EdgeLineProjectXYZ*> vpLineEdgesSP;
-    vpLineEdgesSP.reserve(nLineExpectedSize);
-
-    vector<EdgeLineProjectXYZ*> vpLineEdgesEP;
-    vpLineEdgesEP.reserve(nLineExpectedSize);
-
-    vector<KeyFrame*> vpLineEdgeKF;
-    vpLineEdgeKF.reserve(nLineExpectedSize);
-
-    vector<MapLine*> vpMapLineEdge;
-    vpMapLineEdge.reserve(nLineExpectedSize);
-
-    vector<int> MapLineSPID;
-    // 起始点的顶点
-    for(list<MapLine*>::iterator lit=lLocalMapLines.begin(), lend=lLocalMapLines.end(); lit!=lend; lit++)
-    {
-        MapLine* pML = *lit;
-        g2o::VertexSBAPointXYZ* vStartP = new g2o::VertexSBAPointXYZ();
-        vStartP->setEstimate(pML->GetWorldPos().head(3));
-        int ids = pML->mnId + maxKFid + maxMapPointID + 1;
-        vStartP->setId(ids);
-        cout << "MapLine StartP Id = " << ids << endl;
-        vStartP->setMarginalized(true);
-        optimizer.addVertex(vStartP);
-        MapLineSPID.push_back(ids);
-
-        const map<KeyFrame*, size_t > observations = pML->GetObservations();
-
-        // =========设置线段起始点和相机位姿之间的边=========
-        for(map<KeyFrame*, size_t>::const_iterator mit=observations.begin(), mend=observations.end(); mit!=mend; mit++)
-        {
-            KeyFrame* pKFi = mit->first;
-
-            if(!pKFi->isBad())
-            {
-                Eigen::Vector3d line_obs;
-                line_obs = pKFi->mvKeyLineFunctions[mit->second];
-
-                EdgeLineProjectXYZ* e = new EdgeLineProjectXYZ();
-
-                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(ids)));
-                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKFi->mnId)));
-                e->setMeasurement(line_obs);
-                e->setInformation(Eigen::Matrix3d::Identity()*invSigma);
-
-                g2o::RobustKernelHuber* rk_line_s = new g2o::RobustKernelHuber;
-                e->setRobustKernel(rk_line_s);
-                rk_line_s->setDelta(thHuberMono);
-
-                e->fx = pKFi->fx;
-                e->fy = pKFi->fy;
-                e->cx = pKFi->cx;
-                e->cy = pKFi->cy;
-
-                e->Xw = pML->mWorldPos.head(3);
-
-                optimizer.addEdge(e);
-                vpLineEdgesSP.push_back(e);
-                vpLineEdgeKF.push_back(pKFi);
-                vpMapLineEdge.push_back(pML);
-            }
-        }
-    }
-    cout<<"Optimizer: finish 顶点of lines"<<endl;
-
-    cout<<"Optimizer: START POINT ID:"<<MapLineSPID.size()<<endl;
-    sort(MapLineSPID.begin(), MapLineSPID.end());
-    cout<<"finish sort"<<endl;
-    int maxMapLineSPID = MapLineSPID[MapLineSPID.size()-1];
-    cout<<"Optimizer: maxMapLineSPID:"<<maxMapLineSPID<<endl;
-    // 终止点的顶点
-    for(list<MapLine*>::iterator lit=lLocalMapLines.begin(), lend=lLocalMapLines.end(); lit!=lend; lit++)
-    {
-        MapLine* pML = *lit;
-        g2o::VertexSBAPointXYZ* vEndP = new VertexSBAPointXYZ();
-        vEndP->setEstimate(pML->GetWorldPos().tail(3));
-//        int ide = pML->mnId + maxKFid + maxMapPointID + lLocalMapLines.size() + 1;
-        int ide = pML->mnId + maxKFid + maxMapPointID + maxMapLineSPID + 1;
-        vEndP->setId(ide);
-//        cout << "MapLine EndP Id = " << ide << endl;
-        vEndP->setMarginalized(true);
-        optimizer.addVertex(vEndP);
-
-        const map<KeyFrame*, size_t > observations = pML->GetObservations();
-
-        // =========设置线段终止点和相机位姿之间的边=========
-        for(map<KeyFrame*, size_t>::const_iterator mit=observations.begin(), mend=observations.end(); mit!=mend; mit++)
-        {
-            KeyFrame* pKFi = mit->first;
-
-            if(!pKFi->isBad())
-            {
-                Eigen::Vector3d line_obs;
-                line_obs = pKFi->mvKeyLineFunctions[mit->second];
-
-                EdgeLineProjectXYZ* e = new EdgeLineProjectXYZ();
-
-                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(ide)));
-                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKFi->mnId)));
-                e->setMeasurement(line_obs);
-                e->setInformation(Eigen::Matrix3d::Identity()*invSigma);
-
-                g2o::RobustKernelHuber* rk_line_e = new g2o::RobustKernelHuber;
-                e->setRobustKernel(rk_line_e);
-                rk_line_e->setDelta(thHuberMono);
-
-                e->fx = pKF->fx;
-                e->fy = pKF->fy;
-                e->cx = pKF->cx;
-                e->cy = pKF->cy;
-
-                e->Xw = pML->mWorldPos.head(3);
-
-                optimizer.addEdge(e);
-                vpLineEdgesEP.push_back(e);
-                vpLineEdgeKF.push_back(pKFi);
-                vpMapLineEdge.push_back(pML);
-            }
-        }
-    }
-
-    cout<<"Optimizer: finish 终点of lines"<<endl;
-
-    if(pbStopFlag)
-        if(*pbStopFlag)
-            return;
-
-    optimizer.initializeOptimization();
-    optimizer.optimize(5);
-
-    bool bDoMore = true;
-
-    if(pbStopFlag)
-        if(*pbStopFlag)
-            bDoMore = false;
-
-    if(bDoMore)
-    {
-        // Check inlier observations
-        for(size_t i=0, iend=vpEdgesMono.size(); i<iend; i++)
-        {
-            g2o::EdgeSE3ProjectXYZ* e = vpEdgesMono[i];
-            MapPoint* pMP = vpMapPointEdgeMono[i];
-
-            if(pMP->isBad())
-                continue;
-
-            if(e->chi2()>5.991 || !e->isDepthPositive())
-            {
-                e->setLevel(1);
-            }
-            e->setRobustKernel(0);
-        }
-        cout<<"Optimizer: finish checking inlier observations"<<endl;
-
-        for(size_t i=0, iend=vpLineEdgesSP.size(); i<iend; i++)
-        {
-            EdgeLineProjectXYZ* e = vpLineEdgesSP[i];
-            MapLine* pML = vpMapLineEdge[i];
-
-            if(pML->isBad())
-                continue;
-
-            if(e->chi2()>7.815)
-            {
-                e->setLevel(1);
-            }
-            e->setRobustKernel(0);
-        }
-        cout<<"Optimizer: finish start points of lines"<<endl;
-        for(size_t i=0, iend=vpLineEdgesEP.size(); i<iend; i++)
-        {
-            EdgeLineProjectXYZ* e = vpLineEdgesEP[i];
-            MapLine* pML = vpMapLineEdge[i];
-
-            if(pML->isBad())
-                continue;
-
-            if(e->chi2()>7.815)
-            {
-                e->setLevel(1);
-            }
-            e->setRobustKernel(0);
-        }
-        cout<<"Optimizer: finish end points of lines"<<endl;
-        // Optimize again without the outliers
-        optimizer.initializeOptimization(0);
-        cout<<"Optimizer: finish initialization optimization"<<endl;
-        optimizer.optimize(10);
-    }
-    cout<<"Optimizer: finish bDoMore"<<endl;
-
-    vector<pair<KeyFrame*, MapPoint*>> vToErase;
-    vToErase.reserve(vpEdgesMono.size());
-    cout<<"Optimizer: check inlier observations"<<endl;
-    // check inlier observations
-    for(size_t i=0, iend=vpEdgesMono.size(); i<iend; i++)
-    {
-        g2o::EdgeSE3ProjectXYZ* e = vpEdgesMono[i];
-        MapPoint* pMP = vpMapPointEdgeMono[i];
-
-        if(pMP->isBad())
-            continue;
-
-        if(e->chi2()>5.991 || !e->isDepthPositive())
-        {
-            KeyFrame* pKFi = vpEdgeKFMono[i];
-            vToErase.push_back(make_pair(pKFi,pMP));
-        }
-    }
-
-    vector<pair<KeyFrame*,MapLine*>> vLineToErase;
-    vLineToErase.reserve(vpLineEdgesSP.size());
-    for(size_t i=0, iend=vpLineEdgesSP.size(); i<iend; i++)
-    {
-        EdgeLineProjectXYZ* e = vpLineEdgesSP[i];
-        MapLine* pML = vpMapLineEdge[i];
-
-        if(pML->isBad())
-            continue;
-
-        if(e->chi2()>7.815)
-        {
-            KeyFrame* pKFi = vpLineEdgeKF[i];
-            vLineToErase.push_back(make_pair(pKFi, pML));
-        }
-    }
-
-    // Get Map Mutex
-    unique_lock<mutex> lock(pMap->mMutexMapUpdate);
-
-    if(!vToErase.empty())
-    {
-        for(size_t i=0; i<vToErase.size(); i++)
-        {
-            KeyFrame* pKFi = vToErase[i].first;
-            MapPoint* pMPi = vToErase[i].second;
-            pKFi->EraseMapPointMatch(pMPi);
-            pMPi->EraseObservation(pKFi);
-        }
-    }
-
-    if(!vLineToErase.empty())
-    {
-        for(size_t i=0; i<vLineToErase.size(); i++)
-        {
-            KeyFrame* pKFi = vLineToErase[i].first;
-            MapLine* pMLi = vLineToErase[i].second;
-            pKFi->EraseMapLineMatch(pMLi);
-            pMLi->EraseObservation(pKFi);
-        }
-    }
-    cout<<"Optimizer: recover optimized data"<<endl;
-    // Recover optimized data
-    //Keyframes
-    for(list<KeyFrame*>::iterator lit=lLocalKeyFrames.begin(), lend=lLocalKeyFrames.end(); lit!=lend; lit++)
-    {
-        KeyFrame* pKF = *lit;
-        g2o::VertexSE3Expmap* vSE3 = static_cast<g2o::VertexSE3Expmap*>(optimizer.vertex(pKF->mnId));
-        g2o::SE3Quat SE3quat = vSE3->estimate();
-        pKF->SetPose(Converter::toCvMat(SE3quat));
-    }
-
-    //Points
-    for(list<MapPoint*>::iterator lit=lLocalMapPoints.begin(), lend=lLocalMapPoints.end(); lit!=lend; lit++)
-    {
-        MapPoint* pMP = *lit;
-        g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(pMP->mnId+maxKFid+1));
-        pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));
-        pMP->UpdateNormalAndDepth();
-    }
-
-    // Lines
-    for(list<MapLine*>::iterator lit=lLocalMapLines.begin(), lend=lLocalMapLines.end(); lit!=lend; lit++)
-    {
-        MapLine* pML = *lit;
-        g2o::VertexSBAPointXYZ* vStartP = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(pML->mnId + maxKFid + maxMapPointID + 1));
-        g2o::VertexSBAPointXYZ* vEndP = static_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(pML->mnId + maxKFid + maxMapPointID + maxMapLineSPID + 1));
-
-        Vector6d LinePos;
-        LinePos << Converter::toVector3d(Converter::toCvMat(vStartP->estimate())), Converter::toVector3d(Converter::toCvMat(vEndP->estimate()));
-        pML->SetWorldPos(LinePos);
-        pML->UpdateAverageDir();
-    }
-    cout<<"Optimizer: finish local BA "<<endl;
-}
 
 void Optimizer::OptimizeEssentialGraph(Map* pMap, KeyFrame* pLoopKF, KeyFrame* pCurKF,
                                        const LoopClosing::KeyFrameAndPose &NonCorrectedSim3,
