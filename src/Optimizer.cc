@@ -1,6 +1,6 @@
 ﻿/**
 * This file is part of Structure-SLAM.
-*
+* Copyright (C) 2020 Yanyan Li <yanyan.li at tum.de> (Technical University of Munich)
 *
 */
 /**
@@ -658,367 +658,360 @@ void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<M
  */
 int Optimizer::PoseOptimization(Frame *pFrame,bool isCorner)
 {
-        cout<<"Optimizer: start Pose optimization"<<endl;
-        double invSigma = 1;
-        // 1.构造求解器
-        g2o::SparseOptimizer optimizer;
-        g2o::BlockSolver_6_3::LinearSolverType * linearSolver;
+    g2o::SparseOptimizer optimizer;
+    g2o::BlockSolver_6_3::LinearSolverType *linearSolver;
 
-        linearSolver = new g2o::LinearSolverDense<g2o::BlockSolver_6_3::PoseMatrixType>();  //这里用的是Dense，可能会影响速度
+    linearSolver = new g2o::LinearSolverDense<g2o::BlockSolver_6_3::PoseMatrixType>();
 
-        g2o::BlockSolver_6_3 * solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
+    g2o::BlockSolver_6_3 *solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
 
-        g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
-        optimizer.setAlgorithm(solver);
+    g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
+    optimizer.setAlgorithm(solver);
 
-        int nInitialCorrespondences=0;
+    int nInitialCorrespondences = 0;
 
-        // Set Frame vertex
-        g2o::VertexSE3Expmap * vSE3 = new g2o::VertexSE3Expmap();
+    // Set Frame vertex
+    g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
+    vSE3->setEstimate(Converter::toSE3Quat(pFrame->mTcw));
+    vSE3->setId(0);
+    vSE3->setFixed(false);
+    optimizer.addVertex(vSE3);
+
+    // Set MapPoint vertices
+    const int N = pFrame->N;
+
+    vector<g2o::EdgeSE3ProjectXYZOnlyPose *> vpEdgesMono;
+    vector<size_t> vnIndexEdgeMono;
+    vpEdgesMono.reserve(N);
+    vnIndexEdgeMono.reserve(N);
+
+    vector<g2o::EdgeStereoSE3ProjectXYZOnlyPose *> vpEdgesStereo;
+    vector<size_t> vnIndexEdgeStereo;
+    vpEdgesStereo.reserve(N);
+    vnIndexEdgeStereo.reserve(N);
+
+    const float deltaMono = sqrt(5.991);
+    const float deltaStereo = sqrt(7.815);
+
+    vector<double> vMonoPointInfo(N, 1);
+    vector<double> vSteroPointInfo(N, 1);
+
+    {
+        unique_lock<mutex> lock(MapPoint::mGlobalMutex);
+
+
+        for (int i = 0; i < N; i++) {
+            MapPoint *pMP = pFrame->mvpMapPoints[i];
+            if (pMP) {
+                // Monocular observation
+                if (pFrame->mvuRight[i] < 0) {
+                    nInitialCorrespondences++;
+                    pFrame->mvbOutlier[i] = false;
+
+                    Eigen::Matrix<double, 2, 1> obs;
+                    const cv::KeyPoint &kpUn = pFrame->mvKeysUn[i];
+                    obs << kpUn.pt.x, kpUn.pt.y;
+
+                    g2o::EdgeSE3ProjectXYZOnlyPose *e = new g2o::EdgeSE3ProjectXYZOnlyPose();
+
+                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(0)));
+                    e->setMeasurement(obs);
+                    const float invSigma2 = pFrame->mvInvLevelSigma2[kpUn.octave];
+                    e->setInformation(Eigen::Matrix2d::Identity() * invSigma2);
+
+                    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                    e->setRobustKernel(rk);
+                    rk->setDelta(deltaMono);
+
+                    e->fx = pFrame->fx;
+                    e->fy = pFrame->fy;
+                    e->cx = pFrame->cx;
+                    e->cy = pFrame->cy;
+                    cv::Mat Xw = pMP->GetWorldPos();
+                    e->Xw[0] = Xw.at<float>(0);
+                    e->Xw[1] = Xw.at<float>(1);
+                    e->Xw[2] = Xw.at<float>(2);
+
+                    optimizer.addEdge(e);
+
+                    vpEdgesMono.push_back(e);
+                    vnIndexEdgeMono.push_back(i);
+                } else  // Stereo observation
+                {
+                    nInitialCorrespondences++;
+                    pFrame->mvbOutlier[i] = false;
+
+                    //SET EDGE
+                    Eigen::Matrix<double, 3, 1> obs;
+                    const cv::KeyPoint &kpUn = pFrame->mvKeysUn[i];
+                    const float &kp_ur = pFrame->mvuRight[i];
+                    obs << kpUn.pt.x, kpUn.pt.y, kp_ur;
+
+                    g2o::EdgeStereoSE3ProjectXYZOnlyPose *e = new g2o::EdgeStereoSE3ProjectXYZOnlyPose();
+
+                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(0)));
+                    e->setMeasurement(obs);
+                    const float invSigma2 = pFrame->mvInvLevelSigma2[kpUn.octave];
+                    Eigen::Matrix3d Info = Eigen::Matrix3d::Identity() * invSigma2;
+                    e->setInformation(Info);
+
+                    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                    e->setRobustKernel(rk);
+                    rk->setDelta(deltaStereo);
+
+                    e->fx = pFrame->fx;
+                    e->fy = pFrame->fy;
+                    e->cx = pFrame->cx;
+                    e->cy = pFrame->cy;
+                    e->bf = pFrame->mbf;
+                    cv::Mat Xw = pMP->GetWorldPos();
+                    e->Xw[0] = Xw.at<float>(0);
+                    e->Xw[1] = Xw.at<float>(1);
+                    e->Xw[2] = Xw.at<float>(2);
+
+                    optimizer.addEdge(e);
+
+                    vpEdgesStereo.push_back(e);
+                    vnIndexEdgeStereo.push_back(i);
+                }
+            }
+
+        }
+    }
+
+    const int NL = pFrame->NL;
+
+    vector<EdgeLineProjectXYZOnlyPose *> vpEdgesLineSp;
+    vector<size_t> vnIndexLineEdgeSp;
+    vpEdgesLineSp.reserve(NL);
+    vnIndexLineEdgeSp.reserve(NL);
+
+    vector<EdgeLineProjectXYZOnlyPose *> vpEdgesLineEp;
+    vector<size_t> vnIndexLineEdgeEp;
+    vpEdgesLineEp.reserve(NL);
+    vnIndexLineEdgeEp.reserve(NL);
+
+    vector<double> vMonoStartPointInfo(NL, 1);
+    vector<double> vMonoEndPointInfo(NL, 1);
+    vector<double> vSteroStartPointInfo(NL, 1);
+    vector<double> vSteroEndPointInfo(NL, 1);
+
+    // Set MapLine vertices
+    {
+        unique_lock<mutex> lock(MapLine::mGlobalMutex);
+
+        for (int i = 0; i < NL; i++) {
+            MapLine *pML = pFrame->mvpMapLines[i];
+            if (pML) {
+                nInitialCorrespondences++;
+                pFrame->mvbLineOutlier[i] = false;
+
+                Eigen::Vector3d line_obs;
+                line_obs = pFrame->mvKeyLineFunctions[i];
+
+                EdgeLineProjectXYZOnlyPose *els = new EdgeLineProjectXYZOnlyPose();
+
+                els->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(0)));
+                els->setMeasurement(line_obs);
+                els->setInformation(Eigen::Matrix3d::Identity());
+
+                g2o::RobustKernelHuber *rk_line_s = new g2o::RobustKernelHuber;
+                els->setRobustKernel(rk_line_s);
+                rk_line_s->setDelta(deltaStereo);
+
+                els->fx = pFrame->fx;
+                els->fy = pFrame->fy;
+                els->cx = pFrame->cx;
+                els->cy = pFrame->cy;
+
+                els->Xw = pML->mWorldPos.head(3);
+                optimizer.addEdge(els);
+
+                vpEdgesLineSp.push_back(els);
+                vnIndexLineEdgeSp.push_back(i);
+
+                EdgeLineProjectXYZOnlyPose *ele = new EdgeLineProjectXYZOnlyPose();
+
+                ele->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(0)));
+                ele->setMeasurement(line_obs);
+                ele->setInformation(Eigen::Matrix3d::Identity());
+
+                g2o::RobustKernelHuber *rk_line_e = new g2o::RobustKernelHuber;
+                ele->setRobustKernel(rk_line_e);
+                rk_line_e->setDelta(deltaStereo);
+
+                ele->fx = pFrame->fx;
+                ele->fy = pFrame->fy;
+                ele->cx = pFrame->cx;
+                ele->cy = pFrame->cy;
+
+                ele->Xw = pML->mWorldPos.tail(3);
+
+                optimizer.addEdge(ele);
+
+                vpEdgesLineEp.push_back(ele);
+                vnIndexLineEdgeEp.push_back(i);
+            }
+        }
+    }
+
+    if (nInitialCorrespondences < 3)
+        return 0;
+
+    // We perform 4 optimizations, after each optimization we classify observation as inlier/outlier
+    // At the next optimization, outliers are not included, but at the end they can be classified as inliers again.
+    const float chi2Mono[4] = {5.991, 5.991, 5.991, 5.991};
+    const float chi2Stereo[4] = {7.815, 7.815, 7.815, 7.815};
+    const int its[4] = {10, 10, 10, 10};
+
+    int nBad = 0;
+
+    for (size_t it = 0; it < 4; it++) {
+
         vSE3->setEstimate(Converter::toSE3Quat(pFrame->mTcw));
-        //cout<<"optimization:mTcw"<<pFrame->mTcw<<endl;
-        vSE3->setId(0);
-        vSE3->setFixed(false);
-        optimizer.addVertex(vSE3);
+        optimizer.initializeOptimization(0);
+        optimizer.optimize(its[it]);
 
-        // Set MapPoint vertices
-        const int N = pFrame->N;
+        nBad = 0;
 
-        vector<g2o::EdgeSE3ProjectXYZOnlyPose*> vpEdgesMono;
-        vector<size_t> vnIndexEdgeMono;
-        vpEdgesMono.reserve(N);
-        vnIndexEdgeMono.reserve(N);
+        int PNMono = 0;
+        double PEMono = 0, PMaxMono = 0;
+        for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++) {
+            g2o::EdgeSE3ProjectXYZOnlyPose *e = vpEdgesMono[i];
 
-        vector<g2o::EdgeStereoSE3ProjectXYZOnlyPose*> vpEdgesStereo;
-        vector<size_t> vnIndexEdgeStereo;
-        vpEdgesStereo.reserve(N);
-        vnIndexEdgeStereo.reserve(N);
+            const size_t idx = vnIndexEdgeMono[i];
 
-        const int NL = pFrame->NL;
-        int nLineInitalCorrespondences=0;
-
-        // 起始点
-        vector<EdgeLineProjectXYZOnlyPose*> vpEdgesLineSp;
-        vector<size_t> vnIndexLineEdgeSp;
-        vpEdgesLineSp.reserve(NL);
-        vnIndexLineEdgeSp.reserve(NL);
-
-        // 终止点
-        vector<EdgeLineProjectXYZOnlyPose*> vpEdgesLineEp;
-        vector<size_t> vnIndexLineEdgeEp;
-        vpEdgesLineEp.reserve(NL);
-        vnIndexLineEdgeEp.reserve(NL);
-        const float deltaMono = sqrt(5.991);
-        const float deltaStereo = sqrt(7.815);
-
-        vector<double> vMonoPointInfo(N,1);
-        vector<double> vSteroPointInfo(N,1);
-        vector<double> vMonoStartPointInfo(NL,1);
-        vector<double> vMonoEndPointInfo(NL,1);
-        vector<double> vSteroStartPointInfo(NL,1);
-        vector<double> vSteroEndPointInfo(NL,1);
-        {
-            unique_lock<mutex> lock(MapPoint::mGlobalMutex);
-
-
-            for(int i=0; i<N; i++)
-            {
-                MapPoint* pMP = pFrame->mvpMapPoints[i];
-                if(pMP)
-                {
-                    // Monocular observation
-                    if(pFrame->mvuRight[i]<0)
-                    {
-                        nInitialCorrespondences++;
-                        pFrame->mvbOutlier[i] = false;
-
-                        Eigen::Matrix<double,2,1> obs;
-                        const cv::KeyPoint &kpUn = pFrame->mvKeysUn[i];
-                        obs << kpUn.pt.x, kpUn.pt.y;
-
-                        g2o::EdgeSE3ProjectXYZOnlyPose* e = new g2o::EdgeSE3ProjectXYZOnlyPose();
-
-                        e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
-                        e->setMeasurement(obs);
-                        const float invSigma2 = pFrame->mvInvLevelSigma2[kpUn.octave];
-                        //cout<<"optimization: invSigma2:"<<invSigma2<<endl;
-                        e->setInformation(Eigen::Matrix2d::Identity()*invSigma2);//*vMonoPointInfo[i]);
-
-                        g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
-                        e->setRobustKernel(rk);
-                        rk->setDelta(deltaMono);
-
-                        e->fx = pFrame->fx;
-                        e->fy = pFrame->fy;
-                        e->cx = pFrame->cx;
-                        e->cy = pFrame->cy;
-                        cv::Mat Xw = pMP->GetWorldPos();
-                        e->Xw[0] = Xw.at<float>(0);
-                        e->Xw[1] = Xw.at<float>(1);
-                        e->Xw[2] = Xw.at<float>(2);
-
-                        optimizer.addEdge(e);
-
-                        vpEdgesMono.push_back(e);
-                        vnIndexEdgeMono.push_back(i);
-                    }
-                    else  // Stereo observation
-                    {
-                        nInitialCorrespondences++;
-                        pFrame->mvbOutlier[i] = false;
-
-                        //SET EDGE
-                        Eigen::Matrix<double,3,1> obs;
-                        const cv::KeyPoint &kpUn = pFrame->mvKeysUn[i];
-                        const float &kp_ur = pFrame->mvuRight[i];
-                        obs << kpUn.pt.x, kpUn.pt.y, kp_ur;
-
-                        g2o::EdgeStereoSE3ProjectXYZOnlyPose* e = new g2o::EdgeStereoSE3ProjectXYZOnlyPose();
-
-                        e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
-                        e->setMeasurement(obs);
-                        const float invSigma2 = pFrame->mvInvLevelSigma2[kpUn.octave];
-                        Eigen::Matrix3d Info = Eigen::Matrix3d::Identity()*invSigma2;//*vSteroPointInfo[i];
-                        e->setInformation(Info);
-
-                        g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
-                        e->setRobustKernel(rk);
-                        rk->setDelta(deltaStereo);
-
-                        e->fx = pFrame->fx;
-                        e->fy = pFrame->fy;
-                        e->cx = pFrame->cx;
-                        e->cy = pFrame->cy;
-                        e->bf = pFrame->mbf;
-                        cv::Mat Xw = pMP->GetWorldPos();
-                        e->Xw[0] = Xw.at<float>(0);
-                        e->Xw[1] = Xw.at<float>(1);
-                        e->Xw[2] = Xw.at<float>(2);
-
-                        optimizer.addEdge(e);
-
-                        vpEdgesStereo.push_back(e);
-                        vnIndexEdgeStereo.push_back(i);
-                    }
-                }
-
+            if (pFrame->mvbOutlier[idx]) {
+                e->computeError();
             }
+
+            const float chi2 = e->chi2();
+            //cout<<"optimize chi2"<<chi2<<endl;
+            PNMono++;
+            PEMono += chi2;
+            PMaxMono = PMaxMono > chi2 ? PMaxMono : chi2;
+
+            if (chi2 > chi2Mono[it]) {
+                pFrame->mvbOutlier[idx] = true;
+                e->setLevel(1);
+                nBad++;
+            } else {
+                pFrame->mvbOutlier[idx] = false;
+                vMonoPointInfo[i] = 1.0 / sqrt(chi2);
+                e->setLevel(0);
+            }
+
+            if (it == 2)
+                e->setRobustKernel(0);
         }
-        //cout<<"Optimizer：finish adding points"<<endl;
 
-        ///添加相机位姿和特征线段之间的误差边
-        // Set MapLine vertices
+        if (PNMono == 0)
+            cout << "No mono points " << " ";
+        else
+            cout << " Mono points: " << PEMono / PNMono << " ";
 
+        int PNStereo = 0;
+        double PEStereo = 0, PMaxStereo = 0;
+        for (size_t i = 0, iend = vpEdgesStereo.size(); i < iend; i++) {
+            g2o::EdgeStereoSE3ProjectXYZOnlyPose *e = vpEdgesStereo[i];
 
-        {
-            unique_lock<mutex> lock(MapLine::mGlobalMutex);
+            const size_t idx = vnIndexEdgeStereo[i];
 
-            for(int i=0; i<NL; i++)
-            {
-                MapLine* pML = pFrame->mvpMapLines[i];
-                if(pML)
-                {
-                    //cout << "******** PoseOptimization using line edges ********" << endl;
-                    nLineInitalCorrespondences++;
-                    pFrame->mvbLineOutlier[i] = false;
-
-                    Eigen::Vector3d line_obs;
-                    line_obs = pFrame->mvKeyLineFunctions[i];
-
-                    // 特征线段的起始点
-                    EdgeLineProjectXYZOnlyPose* els = new EdgeLineProjectXYZOnlyPose();
-
-                    els->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
-                    els->setMeasurement(line_obs);
-                    els->setInformation(Eigen::Matrix3d::Identity()*invSigma);//*vSteroStartPointInfo[i]);
-
-                    g2o::RobustKernelHuber* rk_line_s = new g2o::RobustKernelHuber;
-                    els->setRobustKernel(rk_line_s);
-                    rk_line_s->setDelta(deltaStereo);
-
-                    els->fx = pFrame->fx;
-                    els->fy = pFrame->fy;
-                    els->cx = pFrame->cx;
-                    els->cy = pFrame->cy;
-
-//                cv::Mat SP = pML->mStart3D;
-//                els->Xw[0] = SP.at<float>(0);
-//                els->Xw[1] = SP.at<float>(1);
-//                els->Xw[2] = SP.at<float>(2);
-                    els->Xw = pML->mWorldPos.head(3);
-                    //cout<<"Optimization i"<<i<<",els"<<els->Xw[0]<<","<<els->Xw[1]<<","<<els->Xw[2]<<endl;
-                    //cout<<"Opitimization line_obes"<<line_obs[0]<<","<<line_obs[1]<<","<<line_obs[2]<<endl;
-                    //Vector2d proj = cam_project(v1->estimate().map(Xw));
-                    optimizer.addEdge(els);
-
-                    vpEdgesLineSp.push_back(els);
-                    vnIndexLineEdgeSp.push_back(i);
-
-                    // 特征点的终止点
-                    EdgeLineProjectXYZOnlyPose* ele = new EdgeLineProjectXYZOnlyPose();
-
-                    ele->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));
-                    ele->setMeasurement(line_obs);
-                    ele->setInformation(Eigen::Matrix3d::Identity()*invSigma);//vSteroEndPointInfo[i]);
-
-                    g2o::RobustKernelHuber* rk_line_e = new g2o::RobustKernelHuber;
-                    ele->setRobustKernel(rk_line_e);
-                    rk_line_e->setDelta(deltaStereo);
-
-                    ele->fx = pFrame->fx;
-                    ele->fy = pFrame->fy;
-                    ele->cx = pFrame->cx;
-                    ele->cy = pFrame->cy;
-
-//                 cv::Mat EP = pML->mEnd3D;
-//                 ele->Xw[0] = EP.at<float>(0);
-//                 ele->Xw[1] = EP.at<float>(1);
-//                 ele->Xw[2] = EP.at<float>(2);
-                    ele->Xw = pML->mWorldPos.tail(3);
-
-                    optimizer.addEdge(ele);
-
-                    vpEdgesLineEp.push_back(ele);
-                    vnIndexLineEdgeEp.push_back(i);
-                }
+            if (pFrame->mvbOutlier[idx]) {
+                e->computeError();
             }
+
+            const float chi2 = e->chi2();
+            //cout<<"optimize chi2"<<chi2<<endl;
+            PNStereo++;
+            PEStereo += chi2;
+            PMaxStereo = PMaxStereo > chi2 ? PMaxStereo : chi2;
+
+            if (chi2 > chi2Stereo[it]) {
+                pFrame->mvbOutlier[idx] = true;
+                e->setLevel(1);
+                nBad++;
+            } else {
+                e->setLevel(0);
+                pFrame->mvbOutlier[idx] = false;
+                vSteroPointInfo[i] = 1.0 / sqrt(chi2);
+            }
+
+            if (it == 2)
+                e->setRobustKernel(0);
         }
-        cout<<"Optimizer: finish adding Lines"<<endl;
+        if (PNStereo == 0)
+            cout << "No stereo points " << " ";
+        else
+            cout << " Stereo points: " << PEStereo / PNStereo << endl;
 
-        if(nInitialCorrespondences<3)
-            return 0;
+        int PNLine = 0;
+        double PELine = 0, PMaxLine = 0;
+        for (size_t i = 0, iend = vpEdgesLineSp.size(); i < iend; i++) {
+            EdgeLineProjectXYZOnlyPose *e1 = vpEdgesLineSp[i];  //线段起始点
+            EdgeLineProjectXYZOnlyPose *e2 = vpEdgesLineEp[i];  //线段终止点
 
-        // We perform 4 optimizations, after each optimization we classify observation as inlier/outlier
-        // At the next optimization, outliers are not included, but at the end they can be classified as inliers again.
-        const float chi2Mono[4]={5.991,5.991,5.991,5.991};
-        const float chi2Stereo[4]={7.815,7.815,7.815, 7.815};
-        const int its[4]={10,10,10,10};
+            const size_t idx = vnIndexLineEdgeSp[i];    //线段起始点和终止点的误差边的index一样
 
-        int nBad=0;     //点特征
-        int nLineBad=0; //线特征
-        for(size_t it=0; it<4; it++)
-        {
-
-            vSE3->setEstimate(Converter::toSE3Quat(pFrame->mTcw));
-            optimizer.initializeOptimization(0);
-            optimizer.optimize(its[it]);
-
-            nBad=0;
-            for(size_t i=0, iend=vpEdgesMono.size(); i<iend; i++)
-            {
-                g2o::EdgeSE3ProjectXYZOnlyPose* e = vpEdgesMono[i];
-
-                const size_t idx = vnIndexEdgeMono[i];
-
-                if(pFrame->mvbOutlier[idx])
-                {
-                    e->computeError();
-                }
-
-                const float chi2 = e->chi2();
-                //cout<<"optimize chi2"<<chi2<<endl;
-
-                if(chi2>chi2Mono[it])
-                {
-                    pFrame->mvbOutlier[idx]=true;
-                    e->setLevel(1);
-                    nBad++;
-                }
-                else
-                {
-                    pFrame->mvbOutlier[idx]=false;
-                    vMonoPointInfo[i]=1.0/sqrt(chi2);
-                    e->setLevel(0);
-                }
-
-                if(it==2)
-                    e->setRobustKernel(0);
-            }
-
-            for(size_t i=0, iend=vpEdgesStereo.size(); i<iend; i++)
-            {
-                g2o::EdgeStereoSE3ProjectXYZOnlyPose* e = vpEdgesStereo[i];
-
-                const size_t idx = vnIndexEdgeStereo[i];
-
-                if(pFrame->mvbOutlier[idx])
-                {
-                    e->computeError();
-                }
-
-                const float chi2 = e->chi2();
-                //cout<<"optimize chi2"<<chi2<<endl;
-                if(chi2>chi2Stereo[it])
-                {
-                    pFrame->mvbOutlier[idx]=true;
-                    e->setLevel(1);
-                    nBad++;
-                }
-                else
-                {
-                    e->setLevel(0);
-                    pFrame->mvbOutlier[idx]=false;
-                    vSteroPointInfo[i]=1.0/sqrt(chi2);
-                }
-
-                if(it==2)
-                    e->setRobustKernel(0);
-            }
-
-            nLineBad=0;
-            for(size_t i=0, iend=vpEdgesLineSp.size(); i<iend; i++)
-            {
-                EdgeLineProjectXYZOnlyPose* e1 = vpEdgesLineSp[i];  //线段起始点
-                EdgeLineProjectXYZOnlyPose* e2 = vpEdgesLineEp[i];  //线段终止点
-
-                const size_t idx = vnIndexLineEdgeSp[i];    //线段起始点和终止点的误差边的index一样
-
-                if(pFrame->mvbLineOutlier[idx])
-                {
-                    e1->computeError();
-                    e2->computeError();
-                }
+            if (pFrame->mvbLineOutlier[idx]) {
                 e1->computeError();
                 e2->computeError();
+            }
+            e1->computeError();
+            e2->computeError();
 
-                const float chi2_s = e1->chiline();//e1->chi2();
-                const float chi2_e = e2->chiline();//e2->chi2();
-                //cout<<"Optimization: chi2_s"<<chi2_s<<",chi2_e"<<chi2_e<<endl;
+            const float chi2_s = e1->chiline();//e1->chi2();
+            const float chi2_e = e2->chiline();//e2->chi2();
+//                cout<<"Optimization: chi2_s "<<chi2_s<<", chi2_e "<<chi2_e<<endl;
+
+            PNLine++;
+            PELine += chi2_s + chi2_e;
+            PMaxLine = PMaxLine > chi2_s + chi2_e ? PMaxLine : chi2_s + chi2_e;
 
 
-                if(chi2_s > 2*chi2Mono[it] || chi2_e > 2*chi2Mono[it])
-                {
-                    pFrame->mvbLineOutlier[idx]=true;
-                    e1->setLevel(1);
-                    e2->setLevel(1);
-                    nLineBad++;
-                } else
-                {
-                    pFrame->mvbLineOutlier[idx]=false;
-                    e1->setLevel(0);
-                    e2->setLevel(0);
-                    vSteroEndPointInfo[i]=1.0/sqrt(chi2_e);
-                    vSteroStartPointInfo[i]=1.0/sqrt(chi2_s);
-                }
-
-                if(it==2)
-                {
-                    e1->setRobustKernel(0);
-                    e2->setRobustKernel(0);
-                }
+            if (chi2_s > 2 * chi2Mono[it] || chi2_e > 2 * chi2Mono[it]) {
+                pFrame->mvbLineOutlier[idx] = true;
+                e1->setLevel(1);
+                e2->setLevel(1);
+                nBad++;
+            } else {
+                pFrame->mvbLineOutlier[idx] = false;
+                e1->setLevel(0);
+                e2->setLevel(0);
+                vSteroEndPointInfo[i] = 1.0 / sqrt(chi2_e);
+                vSteroStartPointInfo[i] = 1.0 / sqrt(chi2_s);
             }
 
-            if(optimizer.edges().size()<10)
-                break;
+            if (it == 2) {
+                e1->setRobustKernel(0);
+                e2->setRobustKernel(0);
+            }
         }
 
-        // Recover optimized pose and return number of inliers
-        g2o::VertexSE3Expmap* vSE3_recov = static_cast<g2o::VertexSE3Expmap*>(optimizer.vertex(0));
-        g2o::SE3Quat SE3quat_recov = vSE3_recov->estimate();
-        cv::Mat pose = Converter::toCvMat(SE3quat_recov);
-        pFrame->SetPose(pose);
+        if (PNLine == 0)
+            cout << "No lines " << " ";
+        else
+            cout << " Lines: " << PELine / PNLine << endl;
 
-        return nInitialCorrespondences-nBad-nLineBad;
+        int PN = 0;
+        double PE = 0, PMax = 0;
+
+
+        if (PN == 0)
+            cout << "No plane " << " ";
+        else
+            cout << " Plane: " << PE / PN << " "; //<< " Max: " << PMax << endl;
+
+        if (optimizer.edges().size() < 10)
+            break;
+    }
+
+    // Recover optimized pose and return number of inliers
+    g2o::VertexSE3Expmap *vSE3_recov = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(0));
+    g2o::SE3Quat SE3quat_recov = vSE3_recov->estimate();
+    pFrame->SetPose(Converter::toCvMat(SE3quat_recov));
+
+    return nInitialCorrespondences - nBad;
     }
 
 int Optimizer::PoseOptimization(Frame *pFrame)

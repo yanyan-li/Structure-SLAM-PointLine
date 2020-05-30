@@ -1,9 +1,4 @@
 /**
-* This file is part of Structure-SLAM.
-*
-*
-*/
-/**
 * This file is part of ORB-SLAM2.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)

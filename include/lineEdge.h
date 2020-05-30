@@ -1,6 +1,6 @@
 /**
 * This file is part of Structure-SLAM.
-*
+* Copyright (C) 2020 Yanyan Li <yanyan.li at tum.de> (Technical University of Munich)
 *
 */
 

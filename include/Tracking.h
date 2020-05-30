@@ -1,6 +1,6 @@
 /**
 * This file is part of Structure-SLAM.
-*
+* Copyright (C) 2020 Yanyan Li <yanyan.li at tum.de> (Technical University of Munich)
 *
 */
 /**
@@ -121,7 +121,7 @@ public:
     vector<pair<int, int>> mvLineMatches;
     vector<cv::Point3f> mvLineS3D;   //初始化时线段起始点的3D位置
     vector<cv::Point3f> mvLineE3D;   //初始化时线段终止点的3D位置
-    vector<bool> mvbLineTriangulated;   //匹配的线特征是否能够三角化
+    //vector<bool> mvbLineTriangulated;   //匹配的线特征是否能够三角化
     // Lists used to recover the full camera trajectory at the end of the execution.
     // Basically we store the reference keyframe for each frame and its relative transformation
     list<cv::Mat> mlRelativeFramePoses;
@@ -262,6 +262,7 @@ protected:
     list<MapPoint*> mlpTemporalPoints;
     list<MapLine*>mlpTemporalLines;
     shared_ptr<PointCloudMapping>  mpPointCloudMapping;
+
 };
 
 } //namespace StructureSLAM

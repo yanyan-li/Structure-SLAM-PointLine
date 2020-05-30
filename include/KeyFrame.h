@@ -1,4 +1,9 @@
 /**
+* This file is part of Structure-SLAM.
+* Copyright (C) 2020 Yanyan Li <yanyan.li at tum.de> (Technical University of Munich)
+*
+*/
+/**
 * This file is part of ORB-SLAM2.
 *
 * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)

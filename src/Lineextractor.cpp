@@ -1,11 +1,10 @@
-//
-// Created by yan on 18-8-2.
-//
+/**
+* This file is part of Structure-SLAM.
+* Copyright (C) 2020 Yanyan Li <yanyan.li at tum.de> (Technical University of Munich)
+*
+*/
 
 #include "Lineextractor.h"
-//
-// Created by yan on 18-8-2.
-//
 
 struct Data_MLEstimateLine3d_Compact
 {

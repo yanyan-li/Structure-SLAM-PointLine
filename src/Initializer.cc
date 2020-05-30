@@ -1,6 +1,6 @@
 /**
 * This file is part of Structure-SLAM.
-*
+* Copyright (C) 2020 Yanyan Li <yanyan.li at tum.de> (Technical University of Munich)
 *
 */
 /**
@@ -36,22 +36,22 @@
 namespace StructureSLAM
 {
 
-    Initializer::Initializer(const Frame &ReferenceFrame, float sigma, int iterations)
-    {
-        mK = ReferenceFrame.mK.clone();
+Initializer::Initializer(const Frame &ReferenceFrame, float sigma, int iterations)
+{
+    mK = ReferenceFrame.mK.clone();
 
-        mvKeys1 = ReferenceFrame.mvKeysUn;
+    mvKeys1 = ReferenceFrame.mvKeysUn;
 
-        mvKeyLines1 = ReferenceFrame.mvKeylinesUn;  //自己添加的，传递线特征
-        mvKeyLineFunctions1 = ReferenceFrame.mvKeyLineFunctions;    //自己添加的，传递线特征所在直线方程系数
+    mvKeyLines1 = ReferenceFrame.mvKeylinesUn;  //自己添加的，传递线特征
+    mvKeyLineFunctions1 = ReferenceFrame.mvKeyLineFunctions;    //自己添加的，传递线特征所在直线方程系数
 
-        mSigma = sigma;
-        mSigma2 = sigma*sigma;
-        mMaxIterations = iterations;
-    }
+    mSigma = sigma;
+    mSigma2 = sigma*sigma;
+    mMaxIterations = iterations;
+}
 
 
-// 包括线特征的初始化
+// with points and lines
 bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatches12, cv::Mat &R21, cv::Mat &t21,
                              vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated,
                              vector<pair<int, int>> &vLineMatches, vector<cv::Point3f> &vLineS3D, vector<cv::Point3f> &vLineE3D,
@@ -64,7 +64,6 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
     mvMatches12.reserve(mvKeys2.size());
     mvbMatched1.resize(mvKeys1.size());
 
-    // step1: 组织特征点对
     for(size_t i=0, iend=vMatches12.size(); i<iend; i++)
     {
         if(vMatches12[i]>=0)
@@ -76,10 +75,7 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
         }
     }
 
-    // 匹配上的特征点的个数
     const int N = mvMatches12.size();
-
-    // Indices for minimum set selection
     vector<size_t> vAllIndices;
     vAllIndices.reserve(N);
     vector<size_t> vAvailableIndices;
@@ -90,7 +86,6 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
     }
 
     // Generate sets of 8 points for each RANSAC iteration
-    // step2: 在所有匹配特征点对中随机选择8对匹配特征点为一组，共选择mMaxIterations组，用于在RANSAC中计算H和F
     mvSets = vector<vector<size_t >>(mMaxIterations, vector<size_t>(8,0));
 
     DUtils::Random::SeedRandOnce(0);
@@ -112,63 +107,47 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
         }
     }
 
-    // Launch threads to compute in parallel a fundamental matrix and a homograph
-    // step3:调用多线程分别用于计算基础矩阵和单应性矩阵
     vector<bool> vbMatchesInliersH, vbMatchesInliersF;
     float SH, SF;
     cv::Mat H, F;
 
-    // ref是引用的功能:http://en.cppreference.com/w/cpp/utility/functional/ref
-    // 计算H矩阵并打分
     thread threadH(&Initializer::FindHomography,this,ref(vbMatchesInliersH), ref(SH), ref(H));
-    // 计算F矩阵并打分
     thread threadF(&Initializer::FindFundamental,this,ref(vbMatchesInliersF), ref(SF), ref(F));
-
-    // Wait until both threads have finished
     threadH.join();
     threadF.join();
-
-    // Compute ratio of scores
-    // step4: 计算比例得分，选取某个模型
     float RH = SH/(SH+SF);
 
     // Fill structures with current keylines and matches with reference frame
     // Reference Frame: 1, Current Frame: 2
     mvKeyLines2 = CurrentFrame.mvKeylinesUn;
-    mvKeyLineFunctions2 = CurrentFrame.mvKeyLineFunctions;  //当前帧的线特征所在直线的集合
+    mvKeyLineFunctions2 = CurrentFrame.mvKeyLineFunctions;
+    mvbLineMatched1.clear();
     mvLineMatches12.reserve(mvKeyLines2.size());
     mvbLineMatched1.resize(mvKeyLines1.size());
 
-    // 组织线特征匹配对
     vector<Match> lineMatches;
 
-//    lineMatches.reserve(vLineMatches.size());
+    //lineMatches.reserve(vLineMatches.size());
     for(size_t i=0, iend = vLineMatches.size(); i<iend; i++)
     {
-        Match lmatch;
-//        lineMatches[i].first = vLineMatches[i].first;
-//        lineMatches[i].second = vLineMatches[i].second;
-        lmatch.first = vLineMatches[i].first;
-        lmatch.second = vLineMatches[i].second;
-        lineMatches.push_back(lmatch);
+        if(vLineMatches[i].first>=0&&vLineMatches[i].second>=0)
+        {
+            Match lmatch;
+            lmatch.first = vLineMatches[i].first;
+            lmatch.second = vLineMatches[i].second;
+            lineMatches.push_back(lmatch);
+
+        }
     }
 
     if(RH>0.40)
     {
         bool isReconstructH;
-        isReconstructH = ReconstructH(vbMatchesInliersH,H,mK,R21,t21,vP3D,vbTriangulated,1.0,50);
-        if(isReconstructH)
-        {
-            ReconstructLine(lineMatches, mK, R21, t21, mvKeyLineFunctions1, mvKeyLineFunctions2, vLineS3D, vLineE3D, vbLineTriangulated);    //三角化建立线特征的3D端点
-        }
+        isReconstructH = ReconstructH(vbMatchesInliersH,lineMatches,H,mK,R21,t21,vP3D,vLineS3D, vLineE3D,vbTriangulated,vbLineTriangulated,1.0,50);
         return isReconstructH;
     } else{
         bool isReconstructF;
-        isReconstructF = ReconstructF(vbMatchesInliersF,F,mK,R21,t21,vP3D,vbTriangulated,1.0,50);
-        if(isReconstructF)
-        {
-            ReconstructLine(lineMatches, mK, R21, t21, mvKeyLineFunctions1, mvKeyLineFunctions2, vLineS3D, vLineE3D, vbLineTriangulated);    //三角化建立线特征的3D端点
-        }
+        isReconstructF = ReconstructF(vbMatchesInliersF,lineMatches,F,mK,R21,t21,vP3D,vLineS3D, vLineE3D,vbTriangulated,vbLineTriangulated,1.0,50);
         return isReconstructF;
     }
 }
@@ -518,8 +497,9 @@ float Initializer::CheckFundamental(const cv::Mat &F21, vector<bool> &vbMatchesI
 }
 
 
-bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv::Mat &K,
-                               cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated)
+bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, vector<Match> &vLineMatchesF,cv::Mat &F21, cv::Mat &K,
+                               cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<Point3f> &vLineS3D,
+                               vector<Point3f> &vLineE3D, vector<bool> &vbTriangulated,vector<bool> &vbLineTriangulated, float minParallax, int minTriangulated)
 {
     int N=0;
     for(size_t i=0, iend = vbMatchesInliers.size() ; i<iend; i++)
@@ -583,6 +563,7 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
 
             R1.copyTo(R21);
             t1.copyTo(t21);
+            ReconstructLine(vLineMatchesF, mK, R21, t21, mvKeyLineFunctions1, mvKeyLineFunctions2, vLineS3D, vLineE3D, vbLineTriangulated);
             return true;
         }
     }else if(maxGood==nGood2)
@@ -594,6 +575,7 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
 
             R2.copyTo(R21);
             t1.copyTo(t21);
+            ReconstructLine(vLineMatchesF, mK, R21, t21, mvKeyLineFunctions1, mvKeyLineFunctions2, vLineS3D, vLineE3D, vbLineTriangulated);
             return true;
         }
     }else if(maxGood==nGood3)
@@ -605,6 +587,7 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
 
             R1.copyTo(R21);
             t2.copyTo(t21);
+            ReconstructLine(vLineMatchesF, mK, R21, t21, mvKeyLineFunctions1, mvKeyLineFunctions2, vLineS3D, vLineE3D, vbLineTriangulated);
             return true;
         }
     }else if(maxGood==nGood4)
@@ -616,6 +599,7 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
 
             R2.copyTo(R21);
             t2.copyTo(t21);
+            ReconstructLine(vLineMatchesF, mK, R21, t21, mvKeyLineFunctions1, mvKeyLineFunctions2, vLineS3D, vLineE3D, vbLineTriangulated);
             return true;
         }
     }
@@ -624,8 +608,9 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
 }
 
 
-bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::Mat &K,
-                               cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated)
+bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers,vector<Match> &vLineMatchesH, cv::Mat &H21, cv::Mat &K,
+                               cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<Point3f> &vLineS3D,
+                               vector<Point3f> &vLineE3D,vector<bool> &vbTriangulated,vector<bool> &vbLineTriangulated, float minParallax, int minTriangulated)
 {
     int N=0;
     for(size_t i=0, iend = vbMatchesInliers.size() ; i<iend; i++)
@@ -785,8 +770,11 @@ bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv:
         cout << "in Initializer::ReconstructH, " << endl;
         cout << "\t R21 = " << R21 << endl;
         cout << "\t t21 = " << t21 << endl;
-
+        ReconstructLine(vLineMatchesH, mK, R21, t21, mvKeyLineFunctions1, mvKeyLineFunctions2, vLineS3D, vLineE3D, vbLineTriangulated);    //三角化建立线特征的3D端点
         return true;
+
+
+
     }
 
     return false;
@@ -886,8 +874,8 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
         if(!vbMatchesInliers[i])
             continue;
 
-        const cv::KeyPoint &kp1 = vKeys1[vMatches12[i].first];  //第一帧的匹配特征点
-        const cv::KeyPoint &kp2 = vKeys2[vMatches12[i].second]; //第二帧的匹配特征点
+        const cv::KeyPoint &kp1 = vKeys1[vMatches12[i].first];
+        const cv::KeyPoint &kp2 = vKeys2[vMatches12[i].second];
         cv::Mat p3dC1;
 
         // step3：利用三角化法恢复出三维点 p3dC1
@@ -1022,6 +1010,12 @@ void Initializer::LineTriangulate(const KeyLine &kl1, const KeyLine &kl2, const 
     const float &cy1 = P1.at<float>(1,2);
     const float &invfx1 = 1.0/P1.at<float>(0,0);
     const float &invfy1 = 1.0/P1.at<float>(1,1);
+    cv::Mat K=cv::Mat::eye(3,3,CV_32F);
+    K.at<float>(0,0) = P1.at<float>(0,0);
+    K.at<float>(1,1) = P1.at<float>(1,1);
+    K.at<float>(0,2)= P1.at<float>(0,2);
+    K.at<float>(1,2) = P1.at<float>(1,2);
+
 
     Mat lineF1 = (Mat_<float>(3,1) << klf1(0), klf1(1), klf1(2));
     Mat lineF2 = (Mat_<float>(3,1) << klf2(0), klf2(1), klf2(2));
@@ -1030,13 +1024,13 @@ void Initializer::LineTriangulate(const KeyLine &kl1, const KeyLine &kl2, const 
     cv::Mat Tw(3,4,CV_32F);
     e.rowRange(0,3).colRange(0,3).copyTo(Tw.colRange(0,3));
     e.rowRange(0,3).col(3).copyTo(Tw.col(3));
-
+    cv::Mat p1=K*Tw;
     cv::Mat StartC1, EndC1;
     StartC1 = (cv::Mat_<float>(3,1) << (kl1.startPointX-cx1)*invfx1, (kl1.startPointY-cy1)*invfy1, 1.0);
     EndC1 = (cv::Mat_<float>(3,1) << (kl1.endPointX-cx1)*invfx1, (kl1.endPointY-cy1)*invfy1, 1.0);
 
     cv::Mat A(4, 4, CV_32F);
-    A.row(0) = lineF1.t()*P1;
+    A.row(0) = lineF1.t()*p1;
     A.row(1) = lineF2.t()*P2;
     A.row(2) = StartC1.at<float>(0) * Tw.row(2) - Tw.row(0);
     A.row(3) = StartC1.at<float>(1) * Tw.row(2) - Tw.row(1);
@@ -1049,7 +1043,7 @@ void Initializer::LineTriangulate(const KeyLine &kl1, const KeyLine &kl2, const 
     cout<<LineStart3D<<endl;
     // 终止点
     cv::Mat B(4, 4, CV_32F);
-    B.row(0) = lineF1.t()*P1;
+    B.row(0) = lineF1.t()*p1;
     B.row(1) = lineF2.t()*P2;
     B.row(2) = EndC1.at<float>(0) *Tw.row(2) -Tw.row(0);
     B.row(3) = EndC1.at<float>(1) * Tw.row(2) - Tw.row(1);
@@ -1066,8 +1060,6 @@ void Initializer::ReconstructLine(vector<Match> &vLineMatches, cv::Mat &K, cv::M
                                   vector<Vector3d> &vKeyLineFunctions1, vector<Vector3d> &vKeyLineFunctions2,
                                   vector<Point3f> &vLineS3D, vector<Point3f> &vLineE3D, vector<bool> &vbLineTriangulated)
 {
-    //*************类比点特征重建3D点坐标，计算线段特征的两个3D端点坐标**************
-    // Calibration parameters
     const float fx = K.at<float>(0,0);
     const float fy = K.at<float>(1,1);
     const float cx = K.at<float>(0,2);
@@ -1103,7 +1095,7 @@ void Initializer::ReconstructLine(vector<Match> &vLineMatches, cv::Mat &K, cv::M
         Vector3d &klf1 = mvKeyLineFunctions1[vLineMatches[i].first];    //第一帧的特征线段所在直线系数
         Vector3d &klf2 = mvKeyLineFunctions2[vLineMatches[i].second];   //第二帧的特征线段所在直线系数
 
-        // 利用三角法恢复线段的两个三维端点，这里类比点特征的三角化函数
+
 //        LineTriangulate(kl1, kl2, P1, P2, L3dSC1, L3dEC1);
         LineTriangulate(kl1, kl2, P1, P2, klf1, klf2, L3dSC1, L3dEC1);
 

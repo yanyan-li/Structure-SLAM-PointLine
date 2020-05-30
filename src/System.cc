@@ -1,6 +1,6 @@
 /**
 * This file is part of Structure-SLAM.
-*
+* Copyright (C) 2020 Yanyan Li <yanyan.li at tum.de> (Technical University of Munich)
 *
 */
 /**
@@ -44,15 +44,11 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 {
     // Output welcome message
     cout << endl <<
-    "ORB-SLAM2 Copyright (C) 2014-2016 Raul Mur-Artal, University of Zaragoza." << endl <<
-    "This program comes with ABSOLUTELY NO WARRANTY;" << endl  <<
+    "Structure-SLAM Copyright (C) 2020 Yanyan Li, Technical University of Munich." << endl <<
     "This is free software, and you are welcome to redistribute it" << endl <<
     "under certain conditions. See LICENSE.txt." << endl << endl;
 
-    cout << "Input sensor was set to: ";
-
-    if(mSensor==MONOCULAR)
-        cout << "Monocular" << endl;
+    cout << "Monocular" << endl;
 
     //Check settings file
     cv::FileStorage fsSettings(strSettingsFile.c_str(), cv::FileStorage::READ);
@@ -61,10 +57,6 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
        cerr << "Failed to open settings file at: " << strSettingsFile << endl;
        exit(-1);
     }
-
-    // TO DO
-    //float resolution = fsSettings["PointCloudMapping.Resolution"];
-    //float resolution = 0.01;
 
     //Load ORB Vocabulary
     cout << endl << "Loading ORB Vocabulary. This could take a while..." << endl;
@@ -94,8 +86,6 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     //Initialize the Tracking thread
     //(it will live in the main thread of execution, the one that called this constructor)
-    // TO DO
-    //mpPointCloudMapping = make_shared<PointCloudMapping>( resolution );
     mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
                              mpMap, mpKeyFrameDatabase, strSettingsFile, mSensor);
 

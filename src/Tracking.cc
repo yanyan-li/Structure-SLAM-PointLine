@@ -1,6 +1,6 @@
 /**
 * This file is part of Structure-SLAM.
-*
+* Copyright (C) 2020 Yanyan Li <yanyan.li at tum.de> (Technical University of Munich)
 *
 */
 /**
@@ -176,7 +176,7 @@ void Tracking::TrackWithPL()
     }
     bool bIni_Manhattan = true;
     bool bManhattanGood = false;
-    mLastProcessedState=mState;
+    mLastProcessedState = mState;
 
     // Get Map Mutex -> Map cannot be changed
     unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
@@ -195,9 +195,7 @@ void Tracking::TrackWithPL()
         // Initial camera pose estimation using motion model or relocalization (if tracking is lost)
         if(!mbOnlyTracking)
         {
-            // Local Mapping is activated. This is the normal behaviour, unless
-            // you explicitly activate the "only tracking" mode.
-
+            // mapping and tracking
             if(mState==OK)
             {
                 // Local Mapping might have changed some MapPoints tracked in last frame
@@ -380,7 +378,7 @@ void Tracking::MonocularInitialization()
         cv::Mat Rcw; // Current Camera Rotation
         cv::Mat tcw; // Current Camera Translation
         vector<bool> vbTriangulated; // Triangulated Correspondences (mvIniMatches)
-
+        vector<bool> mvbLineTriangulated;   //匹配的线特征是否能够三角化
         if(mpInitializer->Initialize(mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated, mvLineMatches, mvLineS3D, mvLineE3D, mvbLineTriangulated))
         {
             for(size_t i=0, iend=mvIniMatches.size(); i<iend;i++)
@@ -395,7 +393,7 @@ void Tracking::MonocularInitialization()
             {
                 if(mvLineMatches[i].second>=0 && !mvbLineTriangulated[i])
                 {
-                    mvLineMatches[i]= make_pair(-1,-1);
+                    mvLineMatches[i].second = -1;
                     nlineMatches--;
                 }
             }
@@ -854,19 +852,13 @@ sMS Tracking::MeanShift(vector<cv::Point2d> & v2D)
 
 void Tracking::CreateInitialMapMonoWithPL()
 {
-        // step1:创建关键帧，即用于初始化的前两帧
+
         KeyFrame* pKFini = new KeyFrame(mInitialFrame, mpMap, mpKeyFrameDB);
         KeyFrame* pKFcur = new KeyFrame(mCurrentFrame, mpMap, mpKeyFrameDB);
-
-        // step2：将两个关键帧的描述子转为BoW，这里的BoW只有ORB的词袋
         pKFini->ComputeBoW();
         pKFcur->ComputeBoW();
-
-        // step3：将关键帧插入到地图，凡是关键帧，都要插入地图
         mpMap->AddKeyFrame(pKFini);
         mpMap->AddKeyFrame(pKFcur);
-
-        // step4：将特征点的3D点包装成MapPoints
         for(size_t i=0; i<mvIniMatches.size(); i++)
         {
             if(mvIniMatches[i]<0)
@@ -874,91 +866,53 @@ void Tracking::CreateInitialMapMonoWithPL()
 
             // Create MapPoint
             cv::Mat worldPos(mvIniP3D[i]);
-
-            // step4.1：用3D点构造MapPoint
             MapPoint* pMP = new MapPoint(worldPos, pKFcur, mpMap);
-
-            // step4.2：为该MapPoint添加属性：
-            // a.观测到该MapPoint的关键帧
-            // b.该MapPoint的描述子
-            // c.该MapPoint的平均观测方向和深度范围
-
-            // step4.3：表示该KeyFrame的哪个特征点对应到哪个3D点
             pKFini->AddMapPoint(pMP, i);
             pKFcur->AddMapPoint(pMP, mvIniMatches[i]);
-
-            // a.表示该MapPoint可以被哪个KeyFrame观测到，以及对应的第几个特征点
             pMP->AddObservation(pKFini, i);
             pMP->AddObservation(pKFcur, mvIniMatches[i]);
-
-            // b.从众多观测到该MapPoint的特征点中挑选出区分度最高的描述子
             pMP->UpdateNormalAndDepth();
-
             // Fill Current Frame structure
             mCurrentFrame.mvpMapPoints[mvIniMatches[i]] = pMP;
             mCurrentFrame.mvbOutlier[mvIniMatches[i]] = false;
-
             // Add to Map
-            // step4.4：在地图中添加该MapPoint
             mpMap->AddMapPoint(pMP);
         }
 
         // step5：将特征线包装成MapLines
         for(size_t i=0; i<mvLineMatches.size(); i++)
         {
-            if(!mvbLineTriangulated[i])
+            if(mvLineMatches[i].first<0||mvLineMatches[i].second<0)
                 continue;
 
             // Create MapLine
             Vector6d worldPos;
             worldPos << mvLineS3D[i].x, mvLineS3D[i].y, mvLineS3D[i].z, mvLineE3D[i].x, mvLineE3D[i].y, mvLineE3D[i].z;
-
-            //step5.1：用线段的两个端点构造MapLine
             MapLine* pML = new MapLine(worldPos, pKFcur, mpMap);
-
-            //step5.2：为该MapLine添加属性：
-            // a.观测到该MapLine的关键帧
-            // b.该MapLine的描述子
-            // c.该MapLine的平均观测方向和深度范围？
-
-            //step5.3：表示该KeyFrame的哪个特征点可以观测到哪个3D点
             pKFini->AddMapLine(pML,i);
             pKFcur->AddMapLine(pML,i);
 
-            //a.表示该MapLine可以被哪个KeyFrame观测到，以及对应的第几个特征线
             pML->AddObservation(pKFini, i);
-            pML->AddObservation(pKFcur, i);
+            pML->AddObservation(pKFcur, mvLineMatches[i].second);
 
             //b.MapPoint中是选取区分度最高的描述子，pl-slam直接采用前一帧的描述子,这里先按照ORB-SLAM的过程来
             pML->ComputeDistinctiveDescriptors();
-
-            //c.更新该MapLine的平均观测方向以及观测距离的范围
             pML->UpdateAverageDir();
 
             // Fill Current Frame structure
             mCurrentFrame.mvpMapLines[i] = pML;
             mCurrentFrame.mvbLineOutlier[i] = false;
-
-            // step5.4: Add to Map
+            // step: Add to Map
             mpMap->AddMapLine(pML);
         }
 
-        // step6：更新关键帧间的连接关系
-        // 1.最初是在3D点和关键帧之间建立边，每一个边有一个权重，边的权重是该关键帧与当前关键帧公共3D点的个数
-        // 2.加入线特征后，这个关系应该和特征线也有一定的关系，或者就先不加关系，只是单纯的添加线特征
-
-        // step7：全局BA优化，这里需要再进一步修改优化函数，参照OptimizePose函数
-        cout << "this Map created with " << mpMap->MapPointsInMap() << " points, and "<< mpMap->MapLinesInMap() << " lines." << endl;
+        //cout << "this Map created with " << mpMap->MapPointsInMap() << " points, and "<< mpMap->MapLinesInMap() << " lines." << endl;
         //Optimizer::GlobalBundleAdjustemnt(mpMap, 20, true); //true代表使用有线特征的BA
 
         // step8：将MapPoints的中值深度归一化到1，并归一化两帧之间的变换
         // Q：MapPoints的中值深度归一化为1，MapLine是否也归一化？
         float medianDepth = pKFini->ComputeSceneMedianDepth(2);
         float invMedianDepth = 1.0f/medianDepth;
-
-        cout << "medianDepth = " << medianDepth << endl;
-        cout << "pKFcur->TrackedMapPoints(1) = " << pKFcur->TrackedMapPoints(1) << endl;
-
         if(medianDepth<0 || pKFcur->TrackedMapPoints(1)<80)
         {
             cout << "Wrong initialization, reseting ... " << endl;
@@ -1011,11 +965,8 @@ void Tracking::CreateInitialMapMonoWithPL()
 
         mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
         mpMap->SetReferenceMapLines(mvpLocalMapLines);
-
         mpMapDrawer->SetCurrentCameraPose(pKFcur->GetPose());
-
         mpMap->mvpKeyFrameOrigins.push_back(pKFini);
-
         mState = OK;
     }
 
@@ -1092,8 +1043,7 @@ bool Tracking::TrackReferenceKeyFrame()
         }
 
         mCurrentFrame.SetPose(mLastFrame.mTcw);
-        cout<<"tracking reference,pose before opti"<<mLastFrame.mTcw<<endl;
-        // 通过优化3D-2D的重投影误差来获得位姿
+        bool optiPL= true;
 
         Optimizer::PoseOptimization(&mCurrentFrame);
         cout<<"tracking reference,pose after opti"<<mCurrentFrame.mTcw<<endl;

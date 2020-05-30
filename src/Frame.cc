@@ -1,6 +1,6 @@
 /**
 * This file is part of Structure-SLAM.
-*
+*Copyright (C) 2020 Yanyan Li <yanyan.li at tum.de> (Technical University of Munich)
 *
 */
 /**
@@ -95,8 +95,7 @@ Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extra
     UndistortKeyPoints();
 
 
-    //TODO 计算 vanishing direction of lines
-
+    //TODO  vanishing direction of lines
 
     // Set no stereo information
     mvuRight = vector<float>(N,-1);
@@ -567,7 +566,6 @@ Vector6d Frame::obtain3DLine(const int &i)
     cv::Mat Bc = (Mat_<float>(3,1) << Lines3D(3),Lines3D(4),Lines3D(5));
     cv::Mat B= mRwc*Bc+mOw;
     Lines3D<<A.at<float>(0,0),A.at<float>(1,0),A.at<float>(2,0),B.at<float>(0,0),B.at<float>(1,0),B.at<float>(2,0);
-    //cout<<mvLines3D[i]<<endl;
     return Lines3D;
 }
 

@@ -1,5 +1,6 @@
 /**
 * This file is part of Structure-SLAM.
+* Copyright (C) 2020 Yanyan Li <yanyan.li at tum.de> (Technical University of Munich)
 *
 *
 */
@@ -73,12 +74,14 @@ namespace StructureSLAM
                          cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated);
 
         // 分解F矩阵，并从分解后的多个解中找出合适的R，t
-        bool ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv::Mat &K,
-                          cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated);
+        bool ReconstructF(vector<bool> &vbMatchesInliers, vector<Match> &vLineMatchesF, cv::Mat &F21, cv::Mat &K,
+                          cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D,vector<Point3f> &vLineS3D, vector<Point3f> &vLineE3D,
+                          vector<bool> &vbTriangulated, vector<bool> &vinliers, float minParallax, int minTriangulated);
 
         // 分解H矩阵，并从分解后的多个解中找出合适的R，t
-        bool ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::Mat &K,
-                          cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated);
+        bool ReconstructH(vector<bool> &vbMatchesInliers, vector<Match> &vLineMatchesH, cv::Mat &H21, cv::Mat &K,
+                          cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D,vector<Point3f> &vLineS3D, vector<Point3f> &vLineE3D,
+                          vector<bool> &vbTriangulated, vector<bool> &vinliers, float minParallax, int minTriangulated);
 
         // 三角化，利用反投影矩阵将特征点恢复为3D点
         void Triangulate(const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, const cv::Mat &P1, const cv::Mat &P2, cv::Mat &x3D);
