@@ -28,9 +28,8 @@ int main(int argc, char **argv)
     vector<string> vstrImageFilenames;
     vector<string> vstrNormalFilenames;
     vector<double> vTimestamps;
-    string strFile = string(argv[3])+"/mono-normal.txt";
+    string strFile = string(argv[3])+"/rgb.txt";
     LoadImages(strFile, vstrImageFilenames,vstrNormalFilenames, vTimestamps);
-
 
     int nImages = vstrImageFilenames.size();
 
@@ -51,10 +50,9 @@ int main(int argc, char **argv)
     for(int ni=0; ni<nImages; ni++)
     {
         im = cv::imread(string(argv[3])+"/"+vstrImageFilenames[ni],CV_LOAD_IMAGE_UNCHANGED);
-        normal = cv::imread(string(argv[3])+"/"+vstrNormalFilenames[ni],CV_LOAD_IMAGE_UNCHANGED);
         double tframe = vTimestamps[ni];
 
-        if(im.empty()||normal.empty())
+        if(im.empty())
         {
             cerr << endl << "Failed to load image at: "
                  << string(argv[3]) << "/" << vstrImageFilenames[ni] << endl;
@@ -90,6 +88,7 @@ int main(int argc, char **argv)
         if(ttrack<T)
             usleep((T-ttrack)*1e4);
     }
+
 
     // Stop all threads
     SLAM.Shutdown();
@@ -127,13 +126,11 @@ void LoadImages(const string &strFile, vector<string> &vstrImageFilenames, vecto
             stringstream ss;
             ss << s;
             double t;
-            string sRGB, sNormal;
+            string sRGB;
             ss >> t;
             vTimestamps.push_back(t);
             ss >> sRGB;
             vstrImageFilenames.push_back(sRGB);
-            ss >> sNormal;
-            vstrNormalFilenames.push_back(sNormal);
         }
     }
 }
