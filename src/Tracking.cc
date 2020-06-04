@@ -1325,14 +1325,10 @@ bool Tracking::TrackLocalMapWithLines()
         threadPoints.join();
         threadLines.join();
 
-        //cout<<"Tracking: start Poseoptimization"<<endl;
-        // step4：更新局部所有MapPoints和MapLines后对位姿再次优化
         Optimizer::PoseOptimization(&mCurrentFrame, true);
         mnMatchesInliers = 0;
         mnLineMatchesInliers = 0;
 
-        // Update MapPoints Statistics
-        // step5：更新当前帧的MapPoints被观测程度，并统计跟踪局部地图的效果
         for(int i=0; i<mCurrentFrame.N; i++)
         {
             if(mCurrentFrame.mvpMapPoints[i])
@@ -1352,8 +1348,7 @@ bool Tracking::TrackLocalMapWithLines()
                     mCurrentFrame.mvpMapPoints[i] = static_cast<MapPoint*>(NULL);
             }
         }
-        // 更新MapLines Statistics
-        // step6：更新当前帧的MapLines被观测程度，并统计跟踪局部地图的效果
+
         for(int i=0; i<mCurrentFrame.NL; i++)
         {
             if(mCurrentFrame.mvpMapLines[i])
@@ -1725,7 +1720,7 @@ void Tracking::SearchLocalPoints()
         if(mCurrentFrame.isInFrustum(pMP,0.5))
         {
             pMP->IncreaseVisible();
-            nToMatch++; //将要match的
+            nToMatch++;
         }
     }
 
@@ -1744,7 +1739,6 @@ void Tracking::SearchLocalPoints()
 
 void Tracking::SearchLocalLines()
 {
-        // step1：遍历在当前帧的mvpMapLines，标记这些MapLines不参与之后的搜索，因为当前的mvpMapLines一定在当前帧的视野中
         for(vector<MapLine*>::iterator vit=mCurrentFrame.mvpMapLines.begin(), vend=mCurrentFrame.mvpMapLines.end(); vit!=vend; vit++)
         {
             MapLine* pML = *vit;
@@ -1754,11 +1748,8 @@ void Tracking::SearchLocalLines()
                 {
                     *vit = static_cast<MapLine*>(NULL);
                 } else{
-                    // 更新能观测到该线段的帧数加1
                     pML->IncreaseVisible();
-                    // 标记该点被当前帧观测到
                     pML->mnLastFrameSeen = mCurrentFrame.mnId;
-                    // 标记该线段将来不被投影，因为已经匹配过
                     pML->mbTrackInView = false;
                 }
             }
@@ -1766,21 +1757,17 @@ void Tracking::SearchLocalLines()
 
         int nToMatch = 0;
 
-        // step2：将所有局部MapLines投影到当前帧，判断是否在视野范围内，然后进行投影匹配
         for(vector<MapLine*>::iterator vit=mvpLocalMapLines.begin(), vend=mvpLocalMapLines.end(); vit!=vend; vit++)
         {
             MapLine* pML = *vit;
 
-            // 已经被当前帧观测到MapLine，不再判断是否能被当前帧观测到
             if(pML->mnLastFrameSeen == mCurrentFrame.mnId)
                 continue;
             if(pML->isBad())
                 continue;
 
-            // step2.1：判断LocalMapLine是否在视野内
             if(mCurrentFrame.isInFrustum(pML, 0.6))
             {
-                // 观察到该点的帧数加1，该MapLine在某些帧的视野范围内
                 pML->IncreaseVisible();
                 nToMatch++;
             }

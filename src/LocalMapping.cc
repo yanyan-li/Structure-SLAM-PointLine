@@ -475,7 +475,7 @@ void LocalMapping::CreateNewMapPoints()
             cv::Mat xn1 = (cv::Mat_<float>(3,1) << (kp1.pt.x-cx1)*invfx1, (kp1.pt.y-cy1)*invfy1, 1.0);
             cv::Mat xn2 = (cv::Mat_<float>(3,1) << (kp2.pt.x-cx2)*invfx2, (kp2.pt.y-cy2)*invfy2, 1.0);
 
-            // 将特征点坐标，从相机坐标系转换到世界坐标系下
+            // 将特征点坐标，世界坐标系下 观察光线
             cv::Mat ray1 = Rwc1*xn1;
             cv::Mat ray2 = Rwc2*xn2;
             // 计算在世界坐标系下，两个坐标向量间的余弦值
@@ -913,7 +913,7 @@ void LocalMapping::CreateNewMapLines2()
     // Retrieve neighbor keyframes in covisibility graph
     int nn=2;
     if(mbMonocular)
-        nn=5;
+        nn=10;
     //step1：在当前关键帧的共视关键帧中找到共视成都最高的nn帧相邻帧vpNeighKFs
     const vector<KeyFrame*> vpNeighKFs = mpCurrentKeyFrame->GetBestCovisibilityKeyFrames(nn);
 
@@ -1004,8 +1004,7 @@ void LocalMapping::CreateNewMapLines2()
 
         // Triangulate each matched line Segment
         const int nmatches = vMatchedIndices.size();
-        for(int ikl=0; ikl<nmatches; ikl++)
-        {
+        for(int ikl=0; ikl<nmatches; ikl++) {
             // step6.1：取出匹配的特征线
             const int &idx1 = vMatchedIndices[ikl].first;
             const int &idx2 = vMatchedIndices[ikl].second;
@@ -1014,17 +1013,35 @@ void LocalMapping::CreateNewMapLines2()
             const KeyLine &keyline2 = pKF2->mvKeyLines[idx2];
             const Vector3d keyline1_function = mpCurrentKeyFrame->mvKeyLineFunctions[idx1];
             const Vector3d keyline2_function = pKF2->mvKeyLineFunctions[idx2];
-            const Mat klF1 = (Mat_<float>(3,1) << keyline1_function(0),
-                                                keyline1_function(1),
-                                                keyline1_function(2));
-            const Mat klF2 = (Mat_<float>(3,1) << keyline2_function(0),
-                                                keyline2_function(1),
-                                                keyline2_function(2));
+            const Mat klF1 = (Mat_<float>(3, 1) << keyline1_function(0),
+                    keyline1_function(1),
+                    keyline1_function(2));
+            const Mat klF2 = (Mat_<float>(3, 1) << keyline2_function(0),
+                    keyline2_function(1),
+                    keyline2_function(2));
 
             // step6.2：线段在第一帧图像中的坐标
-            cv::Mat StartC1, EndC1;
-            StartC1 = (cv::Mat_<float>(3,1) << (keyline1.startPointX-cx1)*invfx1, (keyline1.startPointY-cy1)*invfy1, 1.0);
-            EndC1 = (cv::Mat_<float>(3,1) << (keyline1.endPointX-cx1)*invfx1, (keyline1.endPointY-cy1)*invfy1, 1.0);
+            cv::Mat StartC1, EndC1, MidC1;
+            StartC1 = (cv::Mat_<float>(3, 1) << (keyline1.startPointX - cx1) * invfx1, (keyline1.startPointY - cy1) *
+                                                                                       invfy1, 1.0);
+            EndC1 = (cv::Mat_<float>(3, 1) << (keyline1.endPointX - cx1) * invfx1, (keyline1.endPointY - cy1) *
+                                                                                   invfy1, 1.0);
+            MidC1 = (StartC1 + EndC1) / 2;
+
+            cv::Mat StartC2, EndC2, MidC2;
+            StartC2 = (cv::Mat_<float>(3, 1) << (keyline2.startPointX - cx1) * invfx1, (keyline2.startPointY - cy1) *
+                                                                                       invfy1, 1.0);
+            EndC2 = (cv::Mat_<float>(3, 1) << (keyline2.endPointX - cx1) * invfx1, (keyline2.endPointY - cy1) *
+                                                                                   invfy1, 1.0);
+            MidC2 = (StartC2 + EndC2) / 2;
+
+            cv::Mat ray1 = Rwc1 * MidC1;
+            cv::Mat ray2 = Rwc2 * MidC2;
+            // 计算在世界坐标系下，两个坐标向量间的余弦值
+            const float cosParallaxRays = ray1.dot(ray2) / (cv::norm(ray1) * cv::norm(ray2));
+
+            float cosParallaxStereo = cosParallaxRays + 1;
+
 
             // step6.3：两帧图像的投影矩阵
             Mat M1 = K1 * Tcw1;
@@ -1032,41 +1049,46 @@ void LocalMapping::CreateNewMapLines2()
 
             // step6.4：三角化恢复线段的3D端点
             cv::Mat s3D, e3D;
-            // 起始点
-            cv::Mat A(4,4,CV_32F);
-            A.row(0) = klF1.t()*M1;
-            A.row(1) = klF2.t()*M2;
-            A.row(2) = StartC1.at<float>(0)*Tcw1.row(2)-Tcw1.row(0);
-            A.row(3) = StartC1.at<float>(1)*Tcw1.row(2)-Tcw1.row(1);
 
-            cv::Mat w1, u1, vt1;
-            cv::SVD::compute(A, w1, u1, vt1, cv::SVD::MODIFY_A| cv::SVD::FULL_UV);
+            if (cosParallaxRays < cosParallaxStereo && cosParallaxRays > 0 && cosParallaxRays < 0.98)
+            {
+                // 起始点
+                cv::Mat A(4,4,CV_32F);
+                A.row(0) = klF1.t()*M1;
+                A.row(1) = klF2.t()*M2;
+                A.row(2) = StartC1.at<float>(0)*Tcw1.row(2)-Tcw1.row(0);
+                A.row(3) = StartC1.at<float>(1)*Tcw1.row(2)-Tcw1.row(1);
 
-            s3D = vt1.row(3).t();
+                cv::Mat w1, u1, vt1;
+                cv::SVD::compute(A, w1, u1, vt1, cv::SVD::MODIFY_A| cv::SVD::FULL_UV);
 
-            if(s3D.at<float>(3)==0)
-                continue;
+                s3D = vt1.row(3).t();
+                if(s3D.at<float>(3)==0)
+                    continue;
 
-            // Euclidean coordinates
-            s3D = s3D.rowRange(0,3)/s3D.at<float>(3);
+                // Euclidean coordinates
+                s3D = s3D.rowRange(0,3)/s3D.at<float>(3);
 
-            // 终止点
-            cv::Mat B(4,4,CV_32F);
-            B.row(0) = klF1.t()*M1;
-            B.row(1) = klF2.t()*M2;
-            B.row(2) = EndC1.at<float>(0)*Tcw1.row(2)-Tcw1.row(0);
-            B.row(3) = EndC1.at<float>(1)*Tcw1.row(2)-Tcw1.row(1);
+                // 终止点
+                cv::Mat B(4,4,CV_32F);
+                B.row(0) = klF1.t()*M1;
+                B.row(1) = klF2.t()*M2;
+                B.row(2) = EndC1.at<float>(0)*Tcw1.row(2)-Tcw1.row(0);
+                B.row(3) = EndC1.at<float>(1)*Tcw1.row(2)-Tcw1.row(1);
 
-            cv::Mat w2, u2, vt2;
-            cv::SVD::compute(B, w2, u2, vt2, cv::SVD::MODIFY_A| cv::SVD::FULL_UV);
+                cv::Mat w2, u2, vt2;
+                cv::SVD::compute(B, w2, u2, vt2, cv::SVD::MODIFY_A| cv::SVD::FULL_UV);
 
-            e3D = vt2.row(3).t();
+                e3D = vt2.row(3).t();
 
-            if(e3D.at<float>(3)==0)
-                continue;
+                if(e3D.at<float>(3)==0)
+                    continue;
 
-            // Euclidean coordinates
-            e3D = e3D.rowRange(0,3)/e3D.at<float>(3);
+                // Euclidean coordinates
+                e3D = e3D.rowRange(0,3)/e3D.at<float>(3);
+
+            } else continue;
+
 
             cv::Mat s3Dt = s3D.t();
             cv::Mat e3Dt = e3D.t();
