@@ -63,7 +63,7 @@ if you use the repo in an academic work, please cite: [Structure-SLAM](https://a
  }
 ```
 
-# 4. Acknowledgements
+# Acknowledgements
 
 We thank [Raul Mur-Artal](https://github.com/raulmurfor) for his impressive work, [**ORB-SLAM2**](https://github.com/raulmur/ORB_SLAM), which is a completed feature-based SLAM system.   
 
