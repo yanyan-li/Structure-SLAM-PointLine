@@ -7,17 +7,6 @@ Structure-SLAM (PL) is a real-time monocular SLAM method that computes the camer
 
 Structure-SLAM is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). For a closed-source version of Structure-SLAM for commercial purposes, please contact me yanyan.li at tum.de 
 
-if you use the repo in an academic work, please cite:
-
-```
-@inproceedings{Li2020SSLAM,
-  author = {Li, Yanyan and Brasch, Nikolas and Wang, Yida and Navab, Nassir and Tombari, Federico},
-  title = {Structure-SLAM: Low-Drift Monocular SLAM in Indoor Environments},
-  year = {2020},
-  booktitle = {IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
- }
-```
-
 # 2. Prerequisites
 We have tested the library in **Ubuntu** **16.04**, but it should be easy to compile in other platforms. A powerful computer (e.g. i7) will ensure real-time performance and provide more stable and accurate results.
 
@@ -59,6 +48,19 @@ chmod +x build.sh
 
 ```
 ./Examples/Structure-SLAM Vocabulary/ORBvoc.txt Examples/ICL.yaml PATH_TO_SEQUENCE_FOLDER
+```
+
+## 4. Related work
+
+if you use the repo in an academic work, please cite: [Structure-SLAM](https://arxiv.org/pdf/2008.01963.pdf)
+
+```
+@inproceedings{Li2020SSLAM,
+  author = {Li, Yanyan and Brasch, Nikolas and Wang, Yida and Navab, Nassir and Tombari, Federico},
+  title = {Structure-SLAM: Low-Drift Monocular SLAM in Indoor Environments},
+  year = {2020},
+  booktitle = {IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+ }
 ```
 
 # 4. Acknowledgements
