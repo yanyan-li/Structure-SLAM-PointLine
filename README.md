@@ -1,5 +1,5 @@
 # Structure-SLAM(PL)
-Structure-SLAM (PL) is a real-time monocular SLAM method that computes the camera trajectory and a sparse 3D reconstruction by leveraging point and line features. We provide examples to run the system on the [ICL NUIM dataset](https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html). 
+This platform provide a real-time monocular SLAM method that computes the camera trajectory and a sparse 3D reconstruction by leveraging point (ORB) and line (LSD) features. We provide examples to run the system on the [ICL NUIM dataset](https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html). 
 
 ​       ![teas](images/teas.png)
 
@@ -29,11 +29,6 @@ We use modified versions of the [DBoW2](https://github.com/dorian3d/DBoW2) libra
 
 ## Download and build
 
-Clone the repository:
-```
-git clone https://github.com/yanyan-li/Structure-SLAM-PL-.git
-```
-
 We provide a script `build.sh` to build the *Thirdparty* libraries and *Structure-SLAM*. Please make sure you have installed all required dependencies (see section 2). Execute:
 ```
 cd Structure-SLAM
@@ -52,7 +47,7 @@ chmod +x build.sh
 
 ## 4. Related work
 
-if you use the repo in an academic work, please cite: [Structure-SLAM](https://arxiv.org/pdf/2008.01963.pdf)
+This platform is part  [Structure-SLAM](https://arxiv.org/pdf/2008.01963.pdf), please cite it if you use the repo in an academic work.
 
 ```
 @inproceedings{Li2020SSLAM,
