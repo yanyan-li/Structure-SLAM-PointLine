@@ -5,7 +5,7 @@ This platform provide a real-time monocular SLAM method that computes the camera
 
 # 1. License 
 
-Structure-SLAM is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). For a closed-source version of Structure-SLAM for commercial purposes, please contact me yanyan.li at tum.de 
+Structure-SLAM(PL) is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). For a closed-source version of Structure-SLAM(PL) for commercial purposes, please contact me yanyan.li at tum.de 
 
 # 2. Prerequisites
 We have tested the library in **Ubuntu** **16.04**, but it should be easy to compile in other platforms. A powerful computer (e.g. i7) will ensure real-time performance and provide more stable and accurate results.
@@ -17,7 +17,7 @@ We use the new thread and chrono functionalities of C++11.
 We use [Pangolin](https://github.com/stevenlovegrove/Pangolin) for visualization and user interface. Dowload and install instructions can be found at: https://github.com/stevenlovegrove/Pangolin.
 
 ## OpenCV
-We use [OpenCV](http://opencv.org) to manipulate images and features. Dowload and install instructions can be found at: http://opencv.org. **Required at leat 2.4.3. Tested with OpenCV 2.4.11 and OpenCV 3.2**.
+We use [OpenCV](http://opencv.org) to manipulate images and features. Dowload and install instructions can be found at: http://opencv.org. **Required at least 2.4.3. Tested with OpenCV 3.4.0**.
 
 ## Eigen3
 Required by g2o (see below). Download and install instructions can be found at: http://eigen.tuxfamily.org. **Required at least 3.1.0**.
@@ -47,7 +47,7 @@ chmod +x build.sh
 
 ## 4. Related work
 
-This platform is part  [Structure-SLAM](https://arxiv.org/pdf/2008.01963.pdf), please cite it if you use the repo in an academic work.
+This platform is a part of  [Structure-SLAM](https://arxiv.org/pdf/2008.01963.pdf), please cite it if you use the repo in an academic work.
 
 ```
 @inproceedings{Li2020SSLAM,
