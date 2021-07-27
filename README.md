@@ -7,7 +7,7 @@ If you are interested in more structure information about indoor SLAM, we comman
 
 # 1. License 
 
-PL-SLAM is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). For a closed-source version of Structure-SLAM(PL) for commercial purposes, please contact me yanyan.li at tum.de 
+PL-SLAM is released under a GPLv3 license. For a closed-source version of Structure-SLAM(PL) for commercial purposes, please contact me yanyan.li at tum.de 
 
 # 2. Prerequisites
 We have tested the library in **Ubuntu** **16.04**, but it should be easy to compile in other platforms. A powerful computer (e.g. i7) will ensure real-time performance and provide more stable and accurate results.
@@ -59,6 +59,17 @@ This platform is a part of  [Structure-SLAM](https://arxiv.org/pdf/2008.01963.pd
   booktitle = {IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
  }
 ```
+
+```
+@article{li2020rgb,
+  title={RGB-D SLAM with Structural Regularities},
+  author={Li, Yanyan and Yunus, Raza and Brasch, Nikolas and Navab, Nassir and Tombari, Federico},
+  journal={IEEE International Conference on Robotics and Automation (ICRA)},
+  year={2021}
+}
+```
+
+
 
 # Acknowledgements
 
