@@ -1,11 +1,13 @@
-# Structure-SLAM(PL)
-This platform provide a real-time monocular SLAM method that computes the camera trajectory and a sparse 3D reconstruction by leveraging point (ORB) and line (LSD) features. We provide examples to run the system on the [ICL NUIM dataset](https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html). 
+# PL SLAM
+This platform provide a real-time monocular SLAM method that computes the camera trajectory and a sparse 3D reconstruction by leveraging point (ORB) and line (LSD) features. We provide examples to run the system on the [ICL NUIM dataset](https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html).  
+
+If you are interested in more structure information about indoor SLAM, we command you to check our [PlanarSLAM](https://github.com/yanyan-li/PlanarSLAM) that proposes ManhattanWorld/VanishingDirection and other modules.  
 
 ​       ![teas](images/teas.png)
 
 # 1. License 
 
-Structure-SLAM(PL) is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). For a closed-source version of Structure-SLAM(PL) for commercial purposes, please contact me yanyan.li at tum.de 
+PL-SLAM is released under a [GPLv3 license](https://github.com/raulmur/StructureSLAM/blob/master/License-gpl.txt). For a closed-source version of Structure-SLAM(PL) for commercial purposes, please contact me yanyan.li at tum.de 
 
 # 2. Prerequisites
 We have tested the library in **Ubuntu** **16.04**, but it should be easy to compile in other platforms. A powerful computer (e.g. i7) will ensure real-time performance and provide more stable and accurate results.
@@ -25,7 +27,7 @@ Required by g2o (see below). Download and install instructions can be found at: 
 ## DBoW2 and g2o (Included in Thirdparty folder)
 We use modified versions of the [DBoW2](https://github.com/dorian3d/DBoW2) library to perform place recognition and [g2o](https://github.com/RainerKuemmerle/g2o) library to perform non-linear optimizations. Both modified libraries (which are BSD) are included in the *Thirdparty* folder.
 
-# 3. Test Structure-SLAM(PL)
+# 3. Test PL-SLAM
 
 ## Download and build
 
